@@ -1,0 +1,36 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@theme {
+  --color-bg: #0b0b0d;
+  --color-surface: #151518;
+  --color-elevated: #1d1d22;
+  --color-card: #18181c;
+  --color-line: #2a2a31;
+  --color-muted: #b6b6c2;
+  --color-luma-blue: #5b8cff;
+  --color-luma-purple: #8b5cf6;
+  --color-luma-green: #34d399;
+  --color-luma-red: #ff6b6b;
+  --color-luma-pink: #f472b6;
+  --color-luma-yellow: #facc15;
+}
+
+@media android {
+  :root {
+    --font-mono: monospace;
+    --font-rounded: normal;
+    --font-serif: serif;
+    --font-sans: normal;
+  }
+}
+
+@media ios {
+  :root {
+    --font-mono: ui-monospace;
+    --font-serif: ui-serif;
+    --font-sans: system-ui;
+    --font-rounded: ui-rounded;
+  }
+}
