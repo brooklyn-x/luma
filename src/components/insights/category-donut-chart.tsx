@@ -125,7 +125,7 @@ function AnimatedSlice({
       d={d}
       stroke={stroke}
       strokeWidth={thickness}
-      strokeLinecap="round"
+      strokeLinecap="butt"
       fill="none"
       strokeDasharray={length}
       animatedProps={animatedProps}
