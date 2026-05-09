@@ -1,3 +1,5 @@
+import type { ImageSourcePropType } from "react-native";
+import { cardImages } from "./card-images";
 import type { Transaction } from "./types";
 
 export type CardKind = "credit" | "debit" | "upi";
@@ -12,6 +14,7 @@ export type Card = {
   gradientFrom: string;
   gradientTo: string;
   contrast: "light" | "dark";
+  image?: ImageSourcePropType;
 };
 
 type IssuerStyle = {
@@ -214,6 +217,7 @@ export function deriveCards(transactions: Transaction[]): Card[] {
     const ps = tx.paymentSource;
     if (!ps || map.has(ps)) continue;
     const { issuerKey, last4 } = parsePaymentSource(ps);
+    if (issuerKey === "Card") continue;
     const style = ISSUER_STYLES[issuerKey] ?? ISSUER_STYLES.Card;
     map.set(ps, {
       id: slugify(ps),
@@ -225,6 +229,7 @@ export function deriveCards(transactions: Transaction[]): Card[] {
       gradientFrom: style.gradientFrom,
       gradientTo: style.gradientTo,
       contrast: style.contrast,
+      image: cardImages[issuerKey],
     });
   }
   return Array.from(map.values());
