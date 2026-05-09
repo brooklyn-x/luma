@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { haptics } from "@/services/haptics";
 import { colors, spacing, typography, useTheme } from "@/theme";
 
 type Props = {
@@ -13,7 +14,13 @@ export function SectionHeader({ title, actionLabel, onAction }: Props) {
     <View style={styles.row}>
       <Text style={[styles.title, { color: t.text }]}>{title}</Text>
       {actionLabel ? (
-        <Pressable onPress={onAction} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            haptics.tap();
+            onAction?.();
+          }}
+          hitSlop={12}
+        >
           <Text style={[styles.action, { color: colors.blue }]}>{actionLabel}</Text>
         </Pressable>
       ) : null}

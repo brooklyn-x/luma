@@ -8,6 +8,7 @@ import { HeroIcon } from "@/components/onboarding/hero-icon";
 import { Glass } from "@/components/ui/glass";
 import { SF } from "@/components/ui/sf";
 import type { Provider } from "@/lib/email-provider";
+import { haptics } from "@/services/haptics";
 import { useAuthStore } from "@/stores/auth-store";
 import { colors, spacing, typography, useTheme } from "@/theme";
 
@@ -130,7 +131,13 @@ export default function ConnectPermission() {
           icon={<SF name="envelope.fill" size={18} tint="#FFFFFF" />}
           onPress={handleConnect}
         />
-        <Pressable onPress={() => router.back()} style={styles.cancel}>
+        <Pressable
+          onPress={() => {
+            haptics.dismiss();
+            router.back();
+          }}
+          style={styles.cancel}
+        >
           <Text style={[styles.cancelText, { color: t.muted }]}>Not now</Text>
         </Pressable>
       </View>

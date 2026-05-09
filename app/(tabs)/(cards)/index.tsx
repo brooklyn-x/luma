@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { CardTile } from "@/components/cards/card-tile";
 import { deriveCards } from "@/data/cards";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { haptics } from "@/services/haptics";
 import { spacing, typography, useTheme } from "@/theme";
 
 export default function CardsIndex() {
@@ -77,7 +78,7 @@ export default function CardsIndex() {
               href={{ pathname: "/(tabs)/(cards)/[id]", params: { id: card.id } }}
               asChild
             >
-              <Pressable>
+              <Pressable onPressIn={() => haptics.tap()}>
                 <CardTile card={card} thisMonthSpend={spendByCard.get(card.id) ?? 0} />
               </Pressable>
             </Link>

@@ -31,7 +31,7 @@ export function ContinueButton({
     scale.value = withSpring(1, { damping: 14, stiffness: 220 });
   };
   const handlePress = () => {
-    haptics.light();
+    haptics.press();
     onPress?.();
   };
 

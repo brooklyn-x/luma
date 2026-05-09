@@ -12,6 +12,7 @@ import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { merchants } from "@/data/merchants";
 import type { Category } from "@/data/types";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { haptics } from "@/services/haptics";
 import { categoryColors, spacing, typography, useTheme } from "@/theme";
 import { displayName } from "@/utils/merchant-display";
 import { formatCurrency } from "@/utils/format";
@@ -109,12 +110,13 @@ export default function MerchantsList() {
               return (
                 <View key={row.id}>
                   <Pressable
-                    onPress={() =>
+                    onPress={() => {
+                      haptics.tap();
                       router.push({
                         pathname: "/(tabs)/(home)/merchant/[id]",
                         params: { id: row.id },
-                      })
-                    }
+                      });
+                    }}
                     android_ripple={{ color: t.tileHighlight }}
                     style={({ pressed }) =>
                       pressed ? { backgroundColor: t.tileHighlight } : null

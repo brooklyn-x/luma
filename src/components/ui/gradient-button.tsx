@@ -38,7 +38,7 @@ export function GradientButton({
   };
   const handlePress = () => {
     if (disabled) return;
-    haptics.light();
+    haptics.press();
     onPress?.();
   };
 

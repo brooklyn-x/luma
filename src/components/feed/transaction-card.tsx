@@ -38,7 +38,7 @@ export function TransactionCard({ transaction, showTime = true }: Props) {
           <Pressable
             onPressIn={onPressIn}
             onPressOut={onPressOut}
-            onPress={() => haptics.selection()}
+            onPress={() => haptics.tap()}
           >
             <View
               style={[

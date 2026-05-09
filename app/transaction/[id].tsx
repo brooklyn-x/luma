@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
-  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -13,6 +12,7 @@ import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { SF } from "@/components/ui/sf";
 import { merchants } from "@/data/merchants";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { haptics } from "@/services/haptics";
 import { categoryColors, radius, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatLongDate } from "@/utils/format";
 
@@ -26,7 +26,14 @@ export default function TransactionDetail() {
     return (
       <View style={[styles.root, { backgroundColor: t.background }]}>
         <Text style={[styles.notFound, { color: t.muted }]}>Transaction not found</Text>
-        <Pressable onPress={() => router.back()} style={styles.closeButtonWrap} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            haptics.dismiss();
+            router.back();
+          }}
+          style={styles.closeButtonWrap}
+          hitSlop={12}
+        >
           <Glass cornerRadius={20}>
             <View style={styles.closeButtonInner}>
               <SF name="xmark" size={18} tint={t.text} />
@@ -52,7 +59,13 @@ export default function TransactionDetail() {
         />
       </View>
       <View style={styles.topRow}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            haptics.dismiss();
+            router.back();
+          }}
+          hitSlop={12}
+        >
           <Glass cornerRadius={20}>
             <View style={styles.closeButtonInner}>
               <SF name="xmark" size={18} tint={t.text} />
@@ -74,6 +87,7 @@ export default function TransactionDetail() {
       <ScrollView
         contentContainerStyle={{ padding: spacing.hPad, paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <View style={styles.heroLogoWrap}>
           <MerchantLogo merchantId={tx.merchantId} size={88} />
@@ -146,32 +160,23 @@ function Accordion({
   };
 
   return (
-    <Animated.View layout={LinearTransition.springify().damping(20)}>
-      <Glass cornerRadius={radius.card}>
-        <Pressable onPress={toggle} style={styles.accordionHeader}>
-          <View
-            style={[
-              styles.accordionIcon,
-              { backgroundColor: t.tileHighlight, borderColor: t.tileBorder },
-            ]}
-          >
-            <SF name={symbol} size={16} tint={t.text} />
-          </View>
-          <Text style={[styles.accordionTitle, { color: t.text }]}>{title}</Text>
-          <Animated.View style={chevronStyle}>
-            <SF name="chevron.down" size={16} tint={t.muted} />
-          </Animated.View>
-        </Pressable>
-        {open ? (
-          <Animated.View
-            layout={LinearTransition.springify().damping(20)}
-            style={styles.accordionBody}
-          >
-            {children}
-          </Animated.View>
-        ) : null}
-      </Glass>
-    </Animated.View>
+    <Glass cornerRadius={radius.card}>
+      <Pressable onPress={toggle} style={styles.accordionHeader}>
+        <View
+          style={[
+            styles.accordionIcon,
+            { backgroundColor: t.tileHighlight, borderColor: t.tileBorder },
+          ]}
+        >
+          <SF name={symbol} size={16} tint={t.text} />
+        </View>
+        <Text style={[styles.accordionTitle, { color: t.text }]}>{title}</Text>
+        <Animated.View style={chevronStyle}>
+          <SF name="chevron.down" size={16} tint={t.muted} />
+        </Animated.View>
+      </Pressable>
+      {open ? <View style={styles.accordionBody}>{children}</View> : null}
+    </Glass>
   );
 }
 

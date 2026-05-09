@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { merchants } from "@/data/merchants";
 import type { Category } from "@/data/types";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { haptics } from "@/services/haptics";
 import { categoryColors, colors, spacing, typography, useTheme } from "@/theme";
 
 const RECENT = ["Swiggy", "Uber", "Subscriptions", "Food", "March"];
@@ -70,7 +71,10 @@ export default function SearchIndex() {
             {RECENT.map((r) => (
               <Pressable
                 key={r}
-                onPress={() => setQuery(r)}
+                onPress={() => {
+                  haptics.tap();
+                  setQuery(r);
+                }}
                 style={[
                   styles.chip,
                   { backgroundColor: t.tileFill, borderColor: t.tileBorder },
@@ -86,7 +90,10 @@ export default function SearchIndex() {
             {CATEGORIES.map((cat) => (
               <Pressable
                 key={cat}
-                onPress={() => setQuery(cat)}
+                onPress={() => {
+                  haptics.tap();
+                  setQuery(cat);
+                }}
                 style={[
                   styles.chip,
                   { backgroundColor: t.tileFill, borderColor: t.tileBorder },
@@ -108,7 +115,14 @@ export default function SearchIndex() {
           <Text style={[styles.emptyBody, { color: t.muted }]}>
             Try a merchant, category, or card name.
           </Text>
-          <Pressable onPress={() => setQuery("")} hitSlop={10} style={styles.clearWrap}>
+          <Pressable
+            onPress={() => {
+              haptics.dismiss();
+              setQuery("");
+            }}
+            hitSlop={10}
+            style={styles.clearWrap}
+          >
             <Text style={[styles.clearLink, { color: colors.blue }]}>Clear search</Text>
           </Pressable>
         </View>
@@ -118,7 +132,13 @@ export default function SearchIndex() {
             <Text style={[styles.count, { color: t.muted }]}>
               {results.length} {results.length === 1 ? "result" : "results"} for "{query}"
             </Text>
-            <Pressable onPress={() => setQuery("")} hitSlop={10}>
+            <Pressable
+              onPress={() => {
+                haptics.dismiss();
+                setQuery("");
+              }}
+              hitSlop={10}
+            >
               <Text style={[styles.clearLink, { color: colors.blue }]}>Clear</Text>
             </Pressable>
           </View>

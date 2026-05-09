@@ -23,7 +23,6 @@ export default function SettingsIndex() {
   const [notifications, setNotifications] = useState(true);
 
   const onToggleDark = (next: boolean) => {
-    haptics.selection();
     setThemeMode(next ? "dark" : "light");
   };
 
@@ -80,7 +79,7 @@ export default function SettingsIndex() {
             label="Resync inbox"
             sub="Re-scan last 90 days of receipts"
             onPress={() => {
-              haptics.light();
+              haptics.tap();
               router.push("/syncing");
             }}
           />
@@ -131,7 +130,7 @@ export default function SettingsIndex() {
       <View style={styles.section}>
         <Pressable
           onPress={() => {
-            haptics.warning();
+            haptics.destructive();
             disconnect().then(() => router.replace("/onboarding"));
           }}
         >
