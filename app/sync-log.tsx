@@ -1,9 +1,7 @@
-import { router } from "expo-router";
 import { useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { merchants } from "@/data/merchants";
 import { selectSyncLog, useTransactions, type SyncLogEntry } from "@/hooks/use-transactions";
-import { Glass } from "@/components/ui/glass";
 import { SF } from "@/components/ui/sf";
 import { colors, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatTime } from "@/utils/format";
@@ -19,8 +17,9 @@ export default function SyncLog() {
   const fetchedAt = data?.fetchedAt;
   const scanned = data?.scanned ?? 0;
 
-  const { rows, parsedCount, skippedCount, errorCount } = useMemo(() => {
+  const { rows, parsedCount, billCount, skippedCount, errorCount } = useMemo(() => {
     const parsed = log.filter((e) => e.status === "parsed");
+    const bills = log.filter((e) => e.status === "bill");
     const skipped = log.filter((e) => e.status === "skipped");
     const errors = log.filter((e) => e.status === "error");
     const out: Row[] = [];
@@ -32,6 +31,15 @@ export default function SyncLog() {
         count: parsed.length,
       });
       parsed.forEach((e) => out.push({ kind: "entry", key: `p-${e.id}`, entry: e }));
+    }
+    if (bills.length) {
+      out.push({
+        kind: "header",
+        key: "h-bills",
+        label: "Bills",
+        count: bills.length,
+      });
+      bills.forEach((e) => out.push({ kind: "entry", key: `b-${e.id}`, entry: e }));
     }
     if (skipped.length) {
       out.push({
@@ -58,6 +66,7 @@ export default function SyncLog() {
     return {
       rows: out,
       parsedCount: parsed.length,
+      billCount: bills.length,
       skippedCount: skipped.length,
       errorCount: errors.length,
     };
@@ -65,20 +74,11 @@ export default function SyncLog() {
 
   return (
     <View style={[styles.root, { backgroundColor: t.background }]}>
-      <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Glass cornerRadius={20}>
-            <View style={styles.closeInner}>
-              <SF name="xmark" size={16} tint={t.text} />
-            </View>
-          </Glass>
-        </Pressable>
-        <Text style={[styles.topTitle, { color: t.text }]}>Sync log</Text>
-        <View style={{ width: 36 }} />
-      </View>
+      <View style={styles.spacer} />
 
       <View style={[styles.summary, { borderColor: t.tileBorder }]}>
         <SummaryStat label="Parsed" value={parsedCount} tint={colors.green} />
+        <SummaryStat label="Bills" value={billCount} tint={colors.yellow} />
         <SummaryStat label="Skipped" value={skippedCount} tint={t.muted} />
         <SummaryStat label="Errors" value={errorCount} tint={colors.red} />
         <SummaryStat label="Scanned" value={scanned} tint={colors.blue} />
@@ -146,22 +146,32 @@ function SummaryStat({
 function LogEntryRow({ entry }: { entry: SyncLogEntry }) {
   const t = useTheme();
   const isParsed = entry.status === "parsed";
+  const isBill = entry.status === "bill";
   const isError = entry.status === "error";
-  const tint = isParsed ? colors.green : isError ? colors.red : t.muted;
+  const hasAmount = isParsed || isBill;
+  const tint = isParsed
+    ? colors.green
+    : isBill
+      ? colors.yellow
+      : isError
+        ? colors.red
+        : t.muted;
   const sym = isParsed
     ? "checkmark.circle.fill"
-    : isError
-      ? "xmark.octagon.fill"
-      : "minus.circle";
+    : isBill
+      ? "doc.text.fill"
+      : isError
+        ? "xmark.octagon.fill"
+        : "minus.circle";
 
   const merchantName = entry.merchantId
     ? merchants[entry.merchantId]?.name
     : undefined;
 
-  const primary = isParsed
+  const primary = hasAmount
     ? `${merchantName ?? entry.merchantName ?? entry.merchantId} · ${entry.amount ? formatCurrency(entry.amount) : ""}`
     : entry.subject || entry.from || entry.id;
-  const secondary = isParsed
+  const secondary = hasAmount
     ? `${entry.from} · ${formatTime(entry.date)}`
     : entry.reason
       ? `${entry.from || "—"} · ${entry.reason}`
@@ -189,21 +199,7 @@ function LogEntryRow({ entry }: { entry: SyncLogEntry }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.hPad,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  closeInner: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  topTitle: { ...typography.body, fontWeight: "600" },
+  spacer: { height: 8 },
   summary: {
     marginHorizontal: spacing.hPad,
     flexDirection: "row",

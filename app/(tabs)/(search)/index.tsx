@@ -12,9 +12,18 @@ import { categoryColors, colors, spacing, typography, useTheme } from "@/theme";
 const RECENT = ["Swiggy", "Uber", "Subscriptions", "Food", "March"];
 const CATEGORIES: Category[] = ["Food", "Shopping", "Travel", "Bills", "Entertainment"];
 
+type TypeFilter = "credit" | "card-payment" | "recurring";
+
+const TYPE_FILTERS: { key: TypeFilter; label: string; tint: string }[] = [
+  { key: "credit", label: "Credits / Refunds", tint: colors.green },
+  { key: "card-payment", label: "Bill payments", tint: colors.purple },
+  { key: "recurring", label: "Recurring", tint: colors.blue },
+];
+
 export default function SearchIndex() {
   const t = useTheme();
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
   const { data } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
 
@@ -25,10 +34,21 @@ export default function SearchIndex() {
     []
   );
 
+  const filterLabel = typeFilter
+    ? TYPE_FILTERS.find((f) => f.key === typeFilter)?.label
+    : null;
+
   const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
+    if (!query.trim() && !typeFilter) return [];
+    const q = query.trim().toLowerCase();
     return transactions.filter((tr) => {
+      // Type filter (structured) — applied first
+      if (typeFilter === "credit" && tr.direction !== "credit") return false;
+      if (typeFilter === "card-payment" && tr.kind !== "card-payment") return false;
+      if (typeFilter === "recurring" && !tr.recurring) return false;
+
+      // Free-text query — applied on top of type filter
+      if (!q) return true;
       const m = merchants[tr.merchantId];
       return (
         m?.name.toLowerCase().includes(q) ||
@@ -38,9 +58,9 @@ export default function SearchIndex() {
         tr.paymentSource.toLowerCase().includes(q)
       );
     });
-  }, [query, transactions]);
+  }, [query, transactions, typeFilter]);
 
-  const showResults = query.trim().length > 0;
+  const showResults = query.trim().length > 0 || !!typeFilter;
 
   return (
     <ScrollView
@@ -85,6 +105,26 @@ export default function SearchIndex() {
             ))}
           </View>
 
+          <SectionHeader title="Type" />
+          <View style={styles.chipsWrap}>
+            {TYPE_FILTERS.map((f) => (
+              <Pressable
+                key={f.key}
+                onPress={() => {
+                  haptics.tap();
+                  setTypeFilter(f.key);
+                }}
+                style={[
+                  styles.chip,
+                  { backgroundColor: t.tileFill, borderColor: t.tileBorder },
+                ]}
+              >
+                <View style={[styles.chipDot, { backgroundColor: f.tint }]} />
+                <Text style={[styles.chipText, { color: t.text }]}>{f.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
           <SectionHeader title="Browse" />
           <View style={styles.chipsWrap}>
             {CATEGORIES.map((cat) => (
@@ -119,6 +159,7 @@ export default function SearchIndex() {
             onPress={() => {
               haptics.dismiss();
               setQuery("");
+              setTypeFilter(null);
             }}
             hitSlop={10}
             style={styles.clearWrap}
@@ -130,12 +171,15 @@ export default function SearchIndex() {
         <View style={styles.resultsWrap}>
           <View style={styles.resultsHeader}>
             <Text style={[styles.count, { color: t.muted }]}>
-              {results.length} {results.length === 1 ? "result" : "results"} for "{query}"
+              {results.length} {results.length === 1 ? "result" : "results"}
+              {filterLabel ? ` · ${filterLabel}` : ""}
+              {query ? ` · "${query}"` : ""}
             </Text>
             <Pressable
               onPress={() => {
                 haptics.dismiss();
                 setQuery("");
+                setTypeFilter(null);
               }}
               hitSlop={10}
             >

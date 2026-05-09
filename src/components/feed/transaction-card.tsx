@@ -10,7 +10,7 @@ import { SF } from "@/components/ui/sf";
 import { merchants } from "@/data/merchants";
 import type { Transaction } from "@/data/types";
 import { haptics } from "@/services/haptics";
-import { categoryColors, typography, useTheme } from "@/theme";
+import { categoryColors, colors, typography, useTheme } from "@/theme";
 import { formatCurrency, formatTime } from "@/utils/format";
 
 type Props = {
@@ -69,6 +69,20 @@ export function TransactionCard({ transaction, showTime = true }: Props) {
                       <Text style={[styles.badgeText, { color: t.muted }]}>Recurring</Text>
                     </View>
                   ) : null}
+                  {transaction.kind === "card-payment" ? (
+                    <View
+                      style={[
+                        styles.badge,
+                        {
+                          backgroundColor: t.tileHighlight,
+                          borderColor: t.tileBorder,
+                        },
+                      ]}
+                    >
+                      <SF name="creditcard" size={10} tint={t.muted} />
+                      <Text style={[styles.badgeText, { color: t.muted }]}>Bill payment</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={[styles.sub, { color: t.muted }]} numberOfLines={1}>
                   <Text
@@ -85,8 +99,17 @@ export function TransactionCard({ transaction, showTime = true }: Props) {
                   ) : null}
                 </Text>
               </View>
-              <Text style={[styles.amount, { color: t.text }]}>
-                −{formatCurrency(transaction.amount)}
+              <Text
+                style={[
+                  styles.amount,
+                  {
+                    color:
+                      transaction.direction === "credit" ? colors.green : t.text,
+                  },
+                ]}
+              >
+                {transaction.direction === "credit" ? "+" : "−"}
+                {formatCurrency(transaction.amount)}
               </Text>
             </View>
           </Pressable>

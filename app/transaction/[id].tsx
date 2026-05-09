@@ -13,7 +13,7 @@ import { SF } from "@/components/ui/sf";
 import { merchants } from "@/data/merchants";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
 import { haptics } from "@/services/haptics";
-import { categoryColors, radius, spacing, typography, useTheme } from "@/theme";
+import { categoryColors, colors, radius, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatLongDate } from "@/utils/format";
 
 export default function TransactionDetail() {
@@ -95,7 +95,15 @@ export default function TransactionDetail() {
         <Text style={[styles.merchant, { color: t.text }]}>
           {merchant?.name ?? tx.merchantName ?? "Unknown"}
         </Text>
-        <Text style={[styles.amount, { color: t.text }]}>−{formatCurrency(tx.amount)}</Text>
+        <Text
+          style={[
+            styles.amount,
+            { color: tx.direction === "credit" ? colors.green : t.text },
+          ]}
+        >
+          {tx.direction === "credit" ? "+" : "−"}
+          {formatCurrency(tx.amount)}
+        </Text>
         <Text style={[styles.date, { color: t.muted }]}>{formatLongDate(tx.date)}</Text>
 
         <View style={styles.metaRow}>
@@ -126,6 +134,16 @@ export default function TransactionDetail() {
               <MetaRow label="Source" value={tx.paymentSource} />
               <MetaRow label="Reference" value={tx.refId} />
               <MetaRow label="Category" value={tx.category} valueColor={cat} />
+              <MetaRow
+                label="Type"
+                value={
+                  tx.kind === "card-payment"
+                    ? "Card bill payment"
+                    : tx.direction === "credit"
+                      ? "Refund / Credit"
+                      : "Purchase"
+                }
+              />
             </View>
           </Accordion>
         </View>

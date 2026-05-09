@@ -1,6 +1,7 @@
-import type { Transaction } from "@/data/types";
+import { merchants } from "@/data/merchants";
+import type { Bill, Transaction } from "@/data/types";
 import { getProvider, type Provider } from "./email-provider";
-import { parseMessage } from "./parsers";
+import { parseBill, parseMessage } from "./parsers";
 
 export type SyncStage = "list" | "fetch" | "parse" | "done";
 
@@ -9,7 +10,7 @@ export type SyncLogEntry = {
   from: string;
   subject: string;
   date: string;
-  status: "parsed" | "skipped" | "error";
+  status: "parsed" | "skipped" | "error" | "bill";
   amount?: number;
   merchantId?: string;
   merchantName?: string;
@@ -28,6 +29,7 @@ export type SyncProgress = {
 
 export type SyncResult = {
   transactions: Transaction[];
+  bills: Bill[];
   scanned: number;
   fetchedAt: string;
   log: SyncLogEntry[];
@@ -45,7 +47,7 @@ export async function syncTransactions(
   onProgress?: (p: SyncProgress) => void,
   opts: SyncOptions = {}
 ): Promise<SyncResult> {
-  const { daysBack = 365, maxMessages = 1000, existing } = opts;
+  const { daysBack = 180, maxMessages = 2500, existing } = opts;
   // Only treat existing data as incremental if it came from the same provider.
   const usable = existing && existing.provider === provider ? existing : undefined;
   const since = usable ? new Date(usable.fetchedAt) : undefined;
@@ -70,6 +72,7 @@ export async function syncTransactions(
   });
 
   const newTransactions: Transaction[] = [];
+  const newBills: Bill[] = [];
   const log: SyncLogEntry[] = [];
   let processed = 0;
 
@@ -98,14 +101,30 @@ export async function syncTransactions(
             category: tx.category,
           };
         } else {
-          entry = {
-            id,
-            from: msg.from.email || msg.from.name,
-            subject: msg.subject,
-            date: msg.date,
-            status: "skipped",
-            reason: "no amount or unknown sender",
-          };
+          const bill = parseBill(msg);
+          if (bill) {
+            newBills.push(bill);
+            entry = {
+              id,
+              from: msg.from.email || msg.from.name,
+              subject: msg.subject,
+              date: msg.date,
+              status: "bill",
+              amount: bill.totalDue,
+              merchantId: bill.issuer,
+              merchantName: `${bill.issuer} statement`,
+              category: "Bills",
+            };
+          } else {
+            entry = {
+              id,
+              from: msg.from.email || msg.from.name,
+              subject: msg.subject,
+              date: msg.date,
+              status: "skipped",
+              reason: "no amount or unknown sender",
+            };
+          }
         }
       } catch (err) {
         entry = {
@@ -136,20 +155,31 @@ export async function syncTransactions(
 
   // Merge with existing if same provider
   let mergedTransactions: Transaction[];
+  let mergedBills: Bill[];
   let mergedScanned: number;
   if (usable) {
-    const map = new Map<string, Transaction>(
+    const txMap = new Map<string, Transaction>(
       usable.transactions.map((tx) => [tx.id, tx])
     );
-    newTransactions.forEach((tx) => map.set(tx.id, tx));
-    mergedTransactions = Array.from(map.values());
+    newTransactions.forEach((tx) => txMap.set(tx.id, tx));
+    mergedTransactions = Array.from(txMap.values());
+    const billMap = new Map<string, Bill>(
+      (usable.bills ?? []).map((b) => [b.id, b])
+    );
+    newBills.forEach((b) => billMap.set(b.id, b));
+    mergedBills = Array.from(billMap.values());
     mergedScanned = usable.scanned + total;
   } else {
     mergedTransactions = newTransactions;
+    mergedBills = newBills;
     mergedScanned = total;
   }
 
+  // Collapse near-duplicates (e.g. bank alert + merchant receipt for same purchase)
+  mergedTransactions = dedupeNearDuplicates(mergedTransactions);
+
   mergedTransactions.sort((a, b) => +new Date(b.date) - +new Date(a.date));
+  mergedBills.sort((a, b) => +new Date(a.dueDate) - +new Date(b.dueDate));
   log.sort((a, b) => +new Date(b.date) - +new Date(a.date));
 
   onProgress?.({
@@ -162,9 +192,75 @@ export async function syncTransactions(
 
   return {
     transactions: mergedTransactions,
+    bills: mergedBills,
     scanned: mergedScanned,
     fetchedAt: new Date().toISOString(),
     log,
     provider,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Near-duplicate detection: merchant + bank alert often emit
+// separate emails for the same purchase. Collapse them into one.
+
+const DUP_WINDOW_MS = 5 * 60 * 1000;
+
+function displayName(tx: Transaction): string | undefined {
+  const known = merchants[tx.merchantId];
+  return known?.name ?? tx.merchantName;
+}
+
+function merchantOverlap(a: Transaction, b: Transaction): boolean {
+  if (a.merchantId === b.merchantId && a.merchantId !== "unknown") return true;
+  const aName = displayName(a)?.toLowerCase();
+  const bName = displayName(b)?.toLowerCase();
+  if (aName && b.gmailSnippet.toLowerCase().includes(aName)) return true;
+  if (bName && a.gmailSnippet.toLowerCase().includes(bName)) return true;
+  return false;
+}
+
+function rankTransaction(tx: Transaction): number {
+  let score = 0;
+  if (/••\d{4}/.test(tx.paymentSource)) score += 10;
+  if (merchants[tx.merchantId]) score += 5;
+  if (tx.kind === "card-payment") score += 3;
+  const idPrefix = tx.id.slice(0, 10).toUpperCase();
+  if (tx.refId && tx.refId.length >= 8 && tx.refId !== idPrefix) score += 2;
+  if (tx.merchantName) score += 1;
+  return score;
+}
+
+function dedupeNearDuplicates(txs: Transaction[]): Transaction[] {
+  const sorted = [...txs].sort(
+    (a, b) => +new Date(a.date) - +new Date(b.date)
+  );
+  const buckets: Transaction[][] = [];
+
+  for (const tx of sorted) {
+    const bucket = buckets.find((group) => {
+      const head = group[0];
+      if (head.direction !== tx.direction) return false;
+      if (head.amount !== tx.amount) return false;
+      const dt = Math.abs(+new Date(tx.date) - +new Date(head.date));
+      if (dt > DUP_WINDOW_MS) return false;
+      return merchantOverlap(head, tx);
+    });
+    if (bucket) bucket.push(tx);
+    else buckets.push([tx]);
+  }
+
+  return buckets.map((group) => {
+    if (group.length === 1) return group[0];
+    const winner = group.reduce(
+      (best, cur) => (rankTransaction(cur) > rankTransaction(best) ? cur : best),
+      group[0]
+    );
+    const earliest = group.reduce(
+      (best, cur) =>
+        +new Date(cur.date) < +new Date(best.date) ? cur : best,
+      group[0]
+    );
+    return { ...winner, date: earliest.date };
+  });
 }

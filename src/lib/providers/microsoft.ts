@@ -248,31 +248,47 @@ async function listMessageIds(opts: ListOptions): Promise<string[]> {
   const ids: string[] = [];
   let initialPath: string;
 
-  if (opts.since) {
-    // Incremental: use $filter on receivedDateTime. $filter and $search are
-    // mutually exclusive in Graph, so the keyword filter is dropped here —
-    // parsers will reject anything that's not a receipt downstream.
-    const iso = opts.since.toISOString();
-    initialPath =
-      `/me/messages` +
-      `?$filter=${encodeURIComponent(`receivedDateTime ge ${iso}`)}` +
-      `&$orderby=${encodeURIComponent("receivedDateTime desc")}` +
-      `&$top=${Math.min(50, opts.max)}` +
-      `&$select=id`;
-  } else {
-    // Full sync: keyword $search ordered by relevance.
-    const query =
-      "receipt OR invoice OR payment OR order OR transaction OR debited OR charged";
-    const search = encodeURIComponent(`"${query}"`);
-    initialPath = `/me/messages?$search=${search}&$top=${Math.min(50, opts.max)}&$select=id`;
-  }
+  const cutoff = opts.since
+    ? opts.since
+    : new Date(Date.now() - (opts.daysBack ?? 365) * 86_400_000);
+  const iso = cutoff.toISOString();
+  initialPath =
+    `/me/messages` +
+    `?$filter=${encodeURIComponent(`receivedDateTime ge ${iso}`)}` +
+    `&$orderby=${encodeURIComponent("receivedDateTime desc")}` +
+    `&$top=${Math.min(50, opts.max)}` +
+    `&$select=id,receivedDateTime`;
+
+  console.log("[ms-list] mode:", opts.since ? "incremental" : "full");
+  console.log("[ms-list] cutoff:", iso);
+  console.log("[ms-list] max:", opts.max);
+  console.log("[ms-list] initialPath:", initialPath);
 
   let path: string | null = initialPath;
+  let pageNum = 0;
+  let oldestSeen: string | null = null;
+  let newestSeen: string | null = null;
   while (path && ids.length < opts.max) {
-    const data: { value?: { id: string }[]; "@odata.nextLink"?: string } =
-      await graphFetch(path);
-    if (data.value) ids.push(...data.value.map((m) => m.id));
+    pageNum++;
+    const data: {
+      value?: { id: string; receivedDateTime?: string }[];
+      "@odata.nextLink"?: string;
+    } = await graphFetch(path);
+    const got = data.value ?? [];
+    if (got.length) {
+      ids.push(...got.map((m) => m.id));
+      const dates = got.map((m) => m.receivedDateTime).filter(Boolean) as string[];
+      if (dates.length) {
+        if (!newestSeen) newestSeen = dates[0];
+        oldestSeen = dates[dates.length - 1];
+      }
+    }
     const next = data["@odata.nextLink"];
+    console.log(
+      `[ms-list] page ${pageNum}: +${got.length} ids (total ${ids.length})  oldestThisPage=${
+        got[got.length - 1]?.receivedDateTime ?? "?"
+      }  hasNext=${!!next}`
+    );
     if (next) {
       const url = new URL(next);
       path = `${url.pathname.replace(/^\/v1\.0/, "")}${url.search}`;
@@ -280,6 +296,9 @@ async function listMessageIds(opts: ListOptions): Promise<string[]> {
       path = null;
     }
   }
+  console.log(
+    `[ms-list] DONE: ${ids.length} ids across ${pageNum} pages. newest=${newestSeen} oldest=${oldestSeen} cap=${opts.max} hitCap=${ids.length >= opts.max}`
+  );
   return ids.slice(0, opts.max);
 }
 

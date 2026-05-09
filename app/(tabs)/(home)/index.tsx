@@ -1,13 +1,18 @@
 import { router, Stack } from "expo-router";
 import { useMemo } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BillsDueSection } from "@/components/bills/bills-due-section";
 import { TransactionCard } from "@/components/feed/transaction-card";
 import { CategoryDonutChart, type DonutSlice } from "@/components/insights/category-donut-chart";
 import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { SectionHeader } from "@/components/ui/section-header";
 import { merchants } from "@/data/merchants";
 import type { Category } from "@/data/types";
-import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import {
+  selectActiveBills,
+  selectTransactions,
+  useTransactions,
+} from "@/hooks/use-transactions";
 import { useAuthStore } from "@/stores/auth-store";
 import { categoryColors, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatTime } from "@/utils/format";
@@ -35,11 +40,26 @@ export default function HomeIndex() {
   const greeting = timeOfDayGreeting();
   const { data, isLoading, isError, refetch } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
+  const bills = useMemo(() => selectActiveBills(data), [data]);
 
-  const { total, slices, topMerchants, recent } = useMemo(() => {
-    const total = transactions.reduce((acc, tr) => acc + tr.amount, 0);
+  const { total, received, slices, topMerchants, recent, monthCount } = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const inThisMonth = (iso: string) => {
+      const d = new Date(iso);
+      return d.getFullYear() === curYear && d.getMonth() === curMonth;
+    };
+
+    const monthTx = transactions.filter((tr) => inThisMonth(tr.date));
+    const purchases = monthTx.filter(
+      (tr) => tr.direction === "debit" && tr.kind === "purchase"
+    );
+    const credits = monthTx.filter((tr) => tr.direction === "credit");
+    const total = purchases.reduce((acc, tr) => acc + tr.amount, 0);
+    const received = credits.reduce((acc, tr) => acc + tr.amount, 0);
     const byCategory = new Map<Category, number>();
-    transactions.forEach((tr) => {
+    purchases.forEach((tr) => {
       byCategory.set(tr.category, (byCategory.get(tr.category) ?? 0) + tr.amount);
     });
     const slices: DonutSlice[] = Array.from(byCategory.entries())
@@ -50,14 +70,21 @@ export default function HomeIndex() {
         color: categoryColors[label] ?? "#999",
       }));
     const merchantMap = new Map<string, number>();
-    transactions.forEach((tr) => {
+    purchases.forEach((tr) => {
       merchantMap.set(tr.merchantId, (merchantMap.get(tr.merchantId) ?? 0) + tr.amount);
     });
     const topMerchants = Array.from(merchantMap.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
     const recent = transactions.slice(0, 5);
-    return { total, slices, topMerchants, recent };
+    return {
+      total,
+      received,
+      slices,
+      topMerchants,
+      recent,
+      monthCount: monthTx.length,
+    };
   }, [transactions]);
 
   if (isLoading) {
@@ -130,22 +157,26 @@ export default function HomeIndex() {
             { backgroundColor: t.tileFill, borderColor: t.tileBorder },
           ]}
         >
-          <Text style={[styles.heroLabel, { color: t.muted }]}>Spent recently</Text>
+          <Text style={[styles.heroLabel, { color: t.muted }]}>Spent this month</Text>
           <Text style={[styles.heroAmount, { color: t.text }]}>{formatCurrency(total)}</Text>
+          {received > 0 ? (
+            <Text style={[styles.heroReceived, { color: t.green }]}>
+              +{formatCurrency(received)} received
+            </Text>
+          ) : null}
           <View style={styles.heroFooter}>
             <Text style={[styles.heroMeta, { color: t.muted }]}>
-              {transactions.length} transactions
-            </Text>
-            <Text style={[styles.heroMeta, { color: t.muted }]}>·</Text>
-            <Text
-              style={[styles.heroMeta, { color: t.muted, textDecorationLine: "underline" }]}
-              onPress={() => router.push("/sync-log")}
-            >
-              View sync log
+              {monthCount} transactions
             </Text>
           </View>
         </View>
       </View>
+
+      {bills.length > 0 ? (
+        <View style={styles.billsBlock}>
+          <BillsDueSection bills={bills} />
+        </View>
+      ) : null}
 
       <SectionHeader title="By category" />
       <View style={styles.donutWrap}>
@@ -281,8 +312,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontVariant: ["tabular-nums"],
   },
+  heroReceived: { ...typography.caption, fontSize: 13, fontWeight: "600", marginTop: 4 },
   heroFooter: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   heroMeta: { ...typography.caption },
+  billsBlock: { marginTop: 16 },
   donutWrap: { alignItems: "center", paddingVertical: 12 },
   legendWrap: { paddingHorizontal: spacing.hPad, marginTop: 8 },
   legendCard: {

@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { BillsDueSection } from "@/components/bills/bills-due-section";
 import { CardTileLarge } from "@/components/cards/card-tile-large";
 import { DailySpendChart } from "@/components/cards/daily-spend-chart";
 import { TransactionCard } from "@/components/feed/transaction-card";
@@ -16,7 +17,11 @@ import { SF } from "@/components/ui/sf";
 import { deriveCards } from "@/data/cards";
 import { merchants } from "@/data/merchants";
 import type { Transaction } from "@/data/types";
-import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import {
+  selectActiveBills,
+  selectTransactions,
+  useTransactions,
+} from "@/hooks/use-transactions";
 import { spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatRelativeDay } from "@/utils/format";
 
@@ -98,9 +103,17 @@ export default function CardDetail() {
     });
   }, [cardTxAll, effectiveSelected]);
 
-  const monthTotal = useMemo(
-    () => monthTx.reduce((acc, tx) => acc + tx.amount, 0),
+  const monthPurchases = useMemo(
+    () =>
+      monthTx.filter(
+        (tx) => tx.direction === "debit" && tx.kind === "purchase"
+      ),
     [monthTx]
+  );
+
+  const monthTotal = useMemo(
+    () => monthPurchases.reduce((acc, tx) => acc + tx.amount, 0),
+    [monthPurchases]
   );
 
   const daily = useMemo(() => {
@@ -110,12 +123,21 @@ export default function CardDetail() {
       day: i + 1,
       amount: 0,
     }));
-    monthTx.forEach((tx) => {
+    monthPurchases.forEach((tx) => {
       const day = new Date(tx.date).getDate();
       if (day >= 1 && day <= len) arr[day - 1].amount += tx.amount;
     });
     return arr;
-  }, [monthTx, effectiveSelected]);
+  }, [monthPurchases, effectiveSelected]);
+
+  const cardBills = useMemo(() => {
+    if (!card) return [];
+    return selectActiveBills(data).filter(
+      (b) =>
+        b.issuer === card.issuer ||
+        (card.last4 && b.cardLast4 === card.last4)
+    );
+  }, [data, card]);
 
   const groupedByDay = useMemo(() => {
     const groups = new Map<
@@ -146,7 +168,7 @@ export default function CardDetail() {
       string,
       { id: string; name: string; total: number; count: number }
     >();
-    monthTx.forEach((tx) => {
+    monthPurchases.forEach((tx) => {
       const known = merchants[tx.merchantId];
       const name = known?.name ?? tx.merchantName ?? tx.merchantId;
       const key = tx.merchantId;
@@ -161,7 +183,7 @@ export default function CardDetail() {
     return Array.from(map.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-  }, [monthTx]);
+  }, [monthPurchases]);
 
   const idx = effectiveSelected
     ? months.findIndex(
@@ -265,6 +287,15 @@ export default function CardDetail() {
               daysInMonth={daysInMonthOf(effectiveSelected)}
               tint={card.gradientFrom}
             />
+          </View>
+        ) : null}
+
+        {cardBills.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: t.muted }]}>
+              Upcoming bills
+            </Text>
+            <BillsDueSection bills={cardBills} compact />
           </View>
         ) : null}
 

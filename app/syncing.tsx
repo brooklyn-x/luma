@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +25,8 @@ const MAX_LIVE_LOG = 40;
 export default function Syncing() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ full?: string }>();
+  const force = params.full === "1";
   const [stage, setStage] = useState<Stage>("list");
   const [total, setTotal] = useState(0);
   const [processed, setProcessed] = useState(0);
@@ -32,18 +34,21 @@ export default function Syncing() {
   const [log, setLog] = useState<SyncLogEntry[]>([]);
   const startedRef = useRef(false);
 
-  const mutation = useSyncMutation((p) => {
-    setStage(p.stage);
-    setTotal(p.total);
-    setProcessed(p.processed);
-    setParsed(p.parsed);
-    if (p.lastEntry) {
-      setLog((prev) => {
-        const next = [p.lastEntry as SyncLogEntry, ...prev];
-        return next.slice(0, MAX_LIVE_LOG);
-      });
-    }
-  });
+  const mutation = useSyncMutation(
+    (p) => {
+      setStage(p.stage);
+      setTotal(p.total);
+      setProcessed(p.processed);
+      setParsed(p.parsed);
+      if (p.lastEntry) {
+        setLog((prev) => {
+          const next = [p.lastEntry as SyncLogEntry, ...prev];
+          return next.slice(0, MAX_LIVE_LOG);
+        });
+      }
+    },
+    { force }
+  );
 
   useEffect(() => {
     if (startedRef.current) return;

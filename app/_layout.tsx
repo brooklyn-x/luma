@@ -2,7 +2,7 @@ import { focusManager } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { AppState, View, type AppStateStatus } from "react-native";
+import { AppState, PlatformColor, View, type AppStateStatus } from "react-native";
 import "@/global.css";
 import { RootProvider } from "@/providers/root-provider";
 import { useAuthStore } from "@/stores/auth-store";
@@ -68,10 +68,13 @@ function ThemedStack() {
         <Stack.Screen
           name="sync-log"
           options={{
-            presentation: "formSheet",
-            sheetGrabberVisible: true,
-            sheetAllowedDetents: [0.6, 1.0],
-            animation: "slide_from_bottom",
+            headerShown: true,
+            headerTitle: "Sync log",
+            headerBackTitle: "Settings",
+            headerLargeTitle: false,
+            headerTintColor: PlatformColor("label") as unknown as string,
+            headerShadowVisible: false,
+            animation: "slide_from_right",
           }}
         />
       </Stack>

@@ -1,4 +1,10 @@
-import type { Category, Transaction } from "@/data/types";
+import type {
+  Bill,
+  Category,
+  Direction,
+  Transaction,
+  TxKind,
+} from "@/data/types";
 import type { EmailMessage } from "./email-provider";
 
 export type ParserContext = {
@@ -25,6 +31,8 @@ export type Parser = {
     category?: Category;
     paymentSource?: string;
     recurring?: boolean;
+    direction?: Direction;
+    kind?: TxKind;
   } | null;
 };
 
@@ -455,13 +463,29 @@ function slugifyMerchant(name: string): string {
   );
 }
 
+const CREDIT_RE =
+  /\b(credited|received|refund(?:ed)?|cashback\s+credited|interest\s+credited|salary\s+credited|reversal)\b/i;
+const DEBIT_RE =
+  /\b(debited|spent|paid|charged|sent|withdrawn|purchase|upi\s+txn|paid\s+to|payment\s+made|transferred)\b/i;
+const CARD_PAYMENT_RE =
+  /\b(payment\s+received(?:\s+towards)?|bill\s+paid|thank\s+you\s+for\s+your\s+payment|credit\s+card\s+payment(?:\s+received)?|paid\s+towards\s+(?:your\s+)?credit\s+card|received\s+payment\s+for\s+(?:your\s+)?credit\s+card)\b/i;
+
+function detectDirection(text: string): Direction | null {
+  const credit = CREDIT_RE.test(text);
+  const debit = DEBIT_RE.test(text);
+  if (credit && !debit) return "credit";
+  if (debit && !credit) return "debit";
+  if (credit && debit) return "debit"; // bundled — assume primary tx is debit
+  if (debit) return "debit";
+  return null;
+}
+
 function bankParserExtract(ctx: ParserContext, bank: BankConfig) {
   const text = `${ctx.subject} ${ctx.body}`;
   if (BANK_NOISE_RE.test(ctx.subject)) return null;
   if (!BANK_TRANSACTION_RE.test(text)) return null;
-  const isCredit = /\b(credited|received|refund(?:ed)?)\b/i.test(text) &&
-    !/\b(debited|spent|paid|charged|sent|withdrawn|purchase)\b/i.test(text);
-  if (isCredit) return null;
+  const direction = detectDirection(text);
+  if (!direction) return null;
 
   const amount = parseAmount(text);
   if (!amount) return null;
@@ -473,11 +497,21 @@ function bankParserExtract(ctx: ParserContext, bank: BankConfig) {
   const merchantNameMatch = text.match(MERCHANT_NEAR_RE);
   const rawMerchant = merchantNameMatch?.[1]?.trim();
   const prettyMerchant = rawMerchant ? prettifyMerchant(rawMerchant) : null;
-  const merchantId =
-    merchantHit?.merchantId ??
-    (prettyMerchant ? slugifyMerchant(prettyMerchant) : "unknown");
-  const merchantName = merchantHit ? undefined : prettyMerchant ?? undefined;
-  const category = merchantHit?.category ?? categoryFromKeywords(text);
+  const isCardPayment =
+    direction === "debit" && CARD_PAYMENT_RE.test(text) && !merchantHit && !prettyMerchant;
+
+  const merchantId = isCardPayment
+    ? slugifyMerchant(`${bank.paymentLabel} card bill`)
+    : merchantHit?.merchantId ??
+      (prettyMerchant ? slugifyMerchant(prettyMerchant) : "unknown");
+  const merchantName = isCardPayment
+    ? `${bank.paymentLabel} card bill`
+    : merchantHit
+      ? undefined
+      : prettyMerchant ?? undefined;
+  const category: Category = isCardPayment
+    ? "Bills"
+    : (merchantHit?.category ?? categoryFromKeywords(text));
 
   const refMatch =
     text.match(/(?:UPI\s*Ref|UPI\s*Reference|Ref\s*No|Txn\s*ID|Transaction\s*ID)[:\s]+([A-Z0-9-]{6,})/i);
@@ -490,6 +524,8 @@ function bankParserExtract(ctx: ParserContext, bank: BankConfig) {
     category,
     refId: refMatch?.[1],
     recurring: /(auto[-\s]?pay|standing instruction|si\s+executed|recurring)/i.test(text),
+    direction,
+    kind: (isCardPayment ? "card-payment" : "purchase") as TxKind,
   };
 }
 
@@ -576,6 +612,12 @@ const PARSERS: Parser[] = [
   GENERIC_RECEIPT_PARSER,
 ];
 
+// Marketing / loan-offer / limit-upgrade copy that often slips past sender
+// filters because it comes from a bank domain. If any of these phrases are
+// in the email, treat it as promotional, not transactional.
+const PROMO_RE =
+  /\b(?:pre[-\s]?qualified|pre[-\s]?approved|personal\s+loan|loan\s+(?:of|up\s+to|amount|offer|approved\s+for\s+you)|avail\s+now|all\s+set\s+for\s+you|we\s+said\s+yes|eligible\s+for(?:\s+(?:a|an))?\s+(?:loan|credit|emi)|click\s+here\s+to\s+(?:apply|avail|grab)|limit\s+(?:enhanced|increase[d]?|upgrade)|increased\s+credit\s+limit|emi\s+offer|reward\s+points|exclusive\s+offer\s+for\s+you|special\s+offer|congratulations,?\s+you|insta\s*loan|instant\s+loan)\b/i;
+
 function detectPaymentSource(text: string): string {
   const tl = text.toLowerCase();
   const last4 = text.match(/(?:card|account)\s+(?:ending|xx+)\s*([0-9]{4})/i);
@@ -616,6 +658,10 @@ export function parseMessage(msg: EmailMessage): Transaction | null {
     date: msg.date,
   };
 
+  // Early-skip promotional / loan-offer / limit-upgrade emails before any
+  // parser tries to extract an amount from them.
+  if (PROMO_RE.test(`${ctx.subject} ${ctx.body}`)) return null;
+
   for (const parser of PARSERS) {
     if (!parser.matches(ctx)) continue;
     const out = parser.extract(ctx);
@@ -633,8 +679,85 @@ export function parseMessage(msg: EmailMessage): Transaction | null {
       paymentSource: out.paymentSource ?? detectPaymentSource(combined),
       gmailSnippet: snippet,
       refId: out.refId ?? msg.id.slice(0, 10).toUpperCase(),
+      direction: out.direction ?? "debit",
+      kind: out.kind ?? "purchase",
     };
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Bill statement parser (different shape — Bill, not Transaction)
+
+function findIssuerFromSender(email: string): string | null {
+  const lower = email.toLowerCase();
+  for (const bank of BANKS) {
+    if (bank.domains.some((d) => lower.includes(d.toLowerCase()))) {
+      return bank.paymentLabel;
+    }
+  }
+  return null;
+}
+
+function extractAmountAfter(text: string, anchor: RegExp): number | null {
+  const match = text.match(anchor);
+  if (!match) return null;
+  const after = text.slice(match.index! + match[0].length, match.index! + match[0].length + 80);
+  const amt = after.match(AMOUNT_RE) ?? after.match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
+  if (!amt) return null;
+  const n = Number(amt[1].replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 && n < 10_000_000 ? n : null;
+}
+
+function extractDate(text: string, anchor: RegExp): string | null {
+  const match = text.match(anchor);
+  if (!match || !match[1]) return null;
+  const raw = match[1].trim().slice(0, 40);
+  // Try a few common formats by letting Date parse it directly first.
+  const direct = new Date(raw);
+  if (!isNaN(direct.getTime())) return direct.toISOString();
+  // Fallback: match dd[-/ ]mmm[-/ ]yyyy / dd-mm-yyyy
+  const dmy =
+    raw.match(/([0-9]{1,2})[\s\-/]([A-Za-z]{3,9}|[0-9]{1,2})[\s\-/]([0-9]{2,4})/);
+  if (dmy) {
+    const guess = new Date(`${dmy[1]} ${dmy[2]} ${dmy[3]}`);
+    if (!isNaN(guess.getTime())) return guess.toISOString();
+  }
+  return null;
+}
+
+const BILL_SUBJECT_RE =
+  /e[-\s]?statement|statement\s+is\s+ready|bill\s+(?:is\s+)?(?:ready|generated)|your\s+statement|credit\s+card\s+statement/i;
+
+export function parseBill(msg: EmailMessage): Bill | null {
+  const text = `${msg.subject} ${msg.body}`;
+  if (!BILL_SUBJECT_RE.test(msg.subject)) return null;
+  if (!/total\s+amount\s+due|total\s+due/i.test(text)) return null;
+  if (!/(?:payment\s+)?due\s+date|due\s+by\s+/i.test(text)) return null;
+
+  const issuer = findIssuerFromSender(msg.from.email);
+  if (!issuer) return null;
+
+  const totalDue = extractAmountAfter(text, /total\s+amount\s+due|total\s+due/i);
+  const minDue = extractAmountAfter(text, /minimum\s+amount\s+due|min(?:imum)?\s+due/i);
+  const dueDate = extractDate(text, /(?:payment\s+)?due\s+date[^0-9A-Za-z]*([0-9A-Za-z ,/-]+)/i);
+  const statementDate = extractDate(
+    text,
+    /statement\s+date[^0-9A-Za-z]*([0-9A-Za-z ,/-]+)/i
+  );
+  const cardLast4 = text.match(CARD_LAST4_RE)?.[1];
+
+  if (!totalDue || !dueDate) return null;
+
+  return {
+    id: msg.id,
+    emailId: msg.id,
+    issuer,
+    cardLast4,
+    totalDue,
+    minDue: minDue ?? undefined,
+    statementDate: statementDate ?? undefined,
+    dueDate,
+  };
 }
 

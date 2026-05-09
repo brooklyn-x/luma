@@ -14,9 +14,17 @@ export default function CardsIndex() {
   const cards = useMemo(() => deriveCards(transactions), [transactions]);
 
   const spendByCard = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
     const totals = new Map<string, number>();
     for (const card of cards) totals.set(card.id, 0);
     for (const tx of transactions) {
+      // Only count actual purchases — skip refunds (credits) and card-bill payments
+      if (tx.direction !== "debit" || tx.kind !== "purchase") continue;
+      // Only count current calendar month, matching the "this month" label
+      const d = new Date(tx.date);
+      if (d.getFullYear() !== curYear || d.getMonth() !== curMonth) continue;
       const card = cards.find((c) => c.paymentSource === tx.paymentSource);
       if (!card) continue;
       totals.set(card.id, (totals.get(card.id) ?? 0) + tx.amount);

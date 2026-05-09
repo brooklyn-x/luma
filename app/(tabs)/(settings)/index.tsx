@@ -1,6 +1,7 @@
 import { router, Stack } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SF } from "@/components/ui/sf";
+import { useSyncMutation } from "@/hooks/use-transactions";
 import { haptics } from "@/services/haptics";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore, type ThemeMode } from "@/stores/theme-store";
@@ -77,10 +79,24 @@ export default function SettingsIndex() {
             t={t}
             symbol="arrow.clockwise"
             label="Resync inbox"
-            sub="Re-scan last 90 days of receipts"
+            sub="Full re-scan — last 180 days of receipts"
             onPress={() => {
               haptics.tap();
-              router.push("/syncing");
+              router.push({
+                pathname: "/syncing",
+                params: { full: "1" },
+              });
+            }}
+          />
+          <Divider t={t} />
+          <ActionRow
+            t={t}
+            symbol="doc.text.magnifyingglass"
+            label="View sync log"
+            sub="What was parsed, skipped, or errored"
+            onPress={() => {
+              haptics.tap();
+              router.push("/sync-log");
             }}
           />
         </View>

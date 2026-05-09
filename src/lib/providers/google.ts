@@ -41,7 +41,15 @@ function buildQuery(opts: ListOptions): string {
 }
 
 async function listMessageIds(opts: ListOptions): Promise<string[]> {
-  return listGmailIds(buildQuery(opts), opts.max);
+  const q = buildQuery(opts);
+  console.log("[gm-list] mode:", opts.since ? "incremental" : "full");
+  console.log("[gm-list] max:", opts.max);
+  console.log("[gm-list] query:", q.length > 200 ? q.slice(0, 200) + "…" : q);
+  const ids = await listGmailIds(q, opts.max);
+  console.log(
+    `[gm-list] DONE: ${ids.length} ids returned. cap=${opts.max} hitCap=${ids.length >= opts.max}`
+  );
+  return ids;
 }
 
 async function getMessage(id: string): Promise<EmailMessage> {
