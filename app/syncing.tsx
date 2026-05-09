@@ -5,8 +5,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { merchants } from "@/data/merchants";
 import { useSyncMutation, type SyncLogEntry } from "@/hooks/use-transactions";
 import { haptics } from "@/services/haptics";
-import { AnimatedRing } from "@/components/ui/animated-ring";
-import { Glass } from "@/components/ui/glass";
 import { SF } from "@/components/ui/sf";
 import { colors, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency } from "@/utils/format";
@@ -85,24 +83,28 @@ export default function Syncing() {
       ]}
     >
       <View style={styles.heroWrap}>
-        <AnimatedRing
-          size={120}
-          thickness={9}
-          progress={progress}
-          strokeColor={colors.blue}
-          trackColor={t.tileBorder}
+        <View
+          style={[
+            styles.iconPlate,
+            { backgroundColor: t.tileFill, borderColor: t.tileBorder },
+          ]}
         >
-          <View style={styles.ringCenter}>
-            <Glass cornerRadius={44} style={styles.centerPlate}>
-              <View style={styles.centerInner}>
-                <SF name="envelope.fill" size={18} tint={colors.blue} />
-                <Text style={[styles.percent, { color: t.text }]}>
-                  {Math.round(progress * 100)}%
-                </Text>
-              </View>
-            </Glass>
-          </View>
-        </AnimatedRing>
+          <SF name="envelope.fill" size={28} tint={colors.blue} />
+        </View>
+        <Text style={[styles.percent, { color: t.text }]}>
+          {Math.round(progress * 100)}%
+        </Text>
+        <View style={[styles.progressTrack, { backgroundColor: t.tileBorder }]}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${Math.round(progress * 100)}%`,
+                backgroundColor: colors.blue,
+              },
+            ]}
+          />
+        </View>
       </View>
 
       <Text style={[styles.title, { color: t.text }]}>Reading your inbox</Text>
@@ -211,16 +213,33 @@ function LogRow({ entry }: { entry: SyncLogEntry }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: spacing.hPad },
-  heroWrap: { alignItems: "center", marginTop: 12, marginBottom: 16 },
-  ringCenter: { alignItems: "center", justifyContent: "center", flex: 1 },
-  centerPlate: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+  heroWrap: { alignItems: "center", marginTop: 12, marginBottom: 16, gap: 14 },
+  iconPlate: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  centerInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2 },
-  percent: { ...typography.body, fontWeight: "700", fontSize: 14 },
+  percent: {
+    ...typography.h2,
+    fontSize: 22,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -0.4,
+  },
+  progressTrack: {
+    width: "100%",
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
   title: {
     ...typography.h2,
     fontSize: 24,

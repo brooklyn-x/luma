@@ -61,7 +61,16 @@ function ThemedStack() {
           options={{
             presentation: "formSheet",
             sheetGrabberVisible: true,
-            sheetAllowedDetents: [0.6, 1.0],
+            sheetAllowedDetents: [0.7, 1.0],
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
+          name="merchant/[id]"
+          options={{
+            presentation: "formSheet",
+            sheetGrabberVisible: true,
+            sheetAllowedDetents: [0.7, 1.0],
             animation: "slide_from_bottom",
           }}
         />

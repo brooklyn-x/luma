@@ -1,13 +1,14 @@
-import { FlashList } from "@shopify/flash-list";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
-import { PlatformColor, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { TransactionCard } from "@/components/feed/transaction-card";
 import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { merchants } from "@/data/merchants";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
 import { categoryColors, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency } from "@/utils/format";
+import { deterministicColor } from "@/utils/merchant-display";
 
 export default function MerchantDetail() {
   const t = useTheme();
@@ -27,61 +28,71 @@ export default function MerchantDetail() {
   const displayName = merchant?.name ?? list[0]?.merchantName ?? id ?? "Merchant";
   const category = merchant?.category ?? list[0]?.category;
   const cat = category ? categoryColors[category] ?? t.muted : t.muted;
+  const accent = merchant?.color ?? (id ? deterministicColor(id) : t.elevated);
 
   return (
     <View style={[styles.root, { backgroundColor: t.background }]}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTransparent: true,
-          headerTitle: "",
-          headerBackTitle: "Merchants",
-          headerTintColor: PlatformColor("label") as unknown as string,
-          headerShadowVisible: false,
-          headerBackButtonDisplayMode: "default",
-        }}
-      />
-      <FlashList
-        data={list}
-        keyExtractor={(tx) => tx.id}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{
-          paddingHorizontal: spacing.hPad,
-          paddingBottom: 60,
-        }}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        ListHeaderComponent={() => (
-          <View style={styles.header}>
-            <View style={styles.heroLogoWrap}>
-              {id ? <MerchantLogo merchantId={id} size={88} /> : null}
-            </View>
-            <Text style={[styles.name, { color: t.text }]}>{displayName}</Text>
-            {category ? (
-              <Text style={[styles.category, { color: cat }]}>{category}</Text>
-            ) : null}
-            <Text style={[styles.total, { color: t.text }]}>
-              {formatCurrency(total)}
-            </Text>
-            <Text style={[styles.subtotal, { color: t.muted }]}>
-              {list.length} {list.length === 1 ? "transaction" : "transactions"}
-            </Text>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: t.muted }]}>
-            No transactions for this merchant yet.
-          </Text>
-        }
-        renderItem={({ item }) => <TransactionCard transaction={item} />}
-      />
+      <View style={styles.merchantBlob} pointerEvents="none">
+        <LinearGradient
+          colors={[`${accent}66`, "rgba(11,11,13,0)"]}
+          start={{ x: 0.5, y: 0.1 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+      <View style={styles.header}>
+        <View style={styles.heroLogoWrap}>
+          {id ? <MerchantLogo merchantId={id} size={88} /> : null}
+        </View>
+        <Text style={[styles.name, { color: t.text }]}>{displayName}</Text>
+        {category ? (
+          <Text style={[styles.category, { color: cat }]}>{category}</Text>
+        ) : null}
+        <Text style={[styles.total, { color: t.text }]}>
+          {formatCurrency(total)}
+        </Text>
+        <Text style={[styles.subtotal, { color: t.muted }]}>
+          {list.length} {list.length === 1 ? "transaction" : "transactions"}
+        </Text>
+      </View>
+
+      {list.length === 0 ? (
+        <Text style={[styles.empty, { color: t.muted }]}>
+          No transactions for this merchant yet.
+        </Text>
+      ) : (
+        <View style={styles.txList}>
+          {list.map((tx) => (
+            <TransactionCard key={tx.id} transaction={tx} />
+          ))}
+        </View>
+      )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  merchantBlob: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 360,
+    overflow: "hidden",
+  },
+  content: {
+    paddingHorizontal: spacing.hPad,
+    paddingTop: 28,
+    paddingBottom: 60,
+  },
   header: {
-    paddingTop: 12,
     paddingBottom: 22,
     alignItems: "center",
     gap: 6,
@@ -109,6 +120,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   subtotal: { ...typography.caption, fontSize: 13 },
+  txList: { gap: 10 },
   empty: {
     ...typography.body,
     textAlign: "center",

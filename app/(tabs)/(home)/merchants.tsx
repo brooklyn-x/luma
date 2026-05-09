@@ -113,7 +113,7 @@ export default function MerchantsList() {
                     onPress={() => {
                       haptics.tap();
                       router.push({
-                        pathname: "/(tabs)/(home)/merchant/[id]",
+                        pathname: "/merchant/[id]",
                         params: { id: row.id },
                       });
                     }}

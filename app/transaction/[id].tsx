@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
@@ -12,9 +12,9 @@ import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { SF } from "@/components/ui/sf";
 import { merchants } from "@/data/merchants";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
-import { haptics } from "@/services/haptics";
 import { categoryColors, colors, radius, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatLongDate } from "@/utils/format";
+import { deterministicColor } from "@/utils/merchant-display";
 
 export default function TransactionDetail() {
   const t = useTheme();
@@ -26,26 +26,12 @@ export default function TransactionDetail() {
     return (
       <View style={[styles.root, { backgroundColor: t.background }]}>
         <Text style={[styles.notFound, { color: t.muted }]}>Transaction not found</Text>
-        <Pressable
-          onPress={() => {
-            haptics.dismiss();
-            router.back();
-          }}
-          style={styles.closeButtonWrap}
-          hitSlop={12}
-        >
-          <Glass cornerRadius={20}>
-            <View style={styles.closeButtonInner}>
-              <SF name="xmark" size={18} tint={t.text} />
-            </View>
-          </Glass>
-        </Pressable>
       </View>
     );
   }
 
   const merchant = merchants[tx.merchantId];
-  const accent = merchant?.color ?? t.elevated;
+  const accent = merchant?.color ?? deterministicColor(tx.merchantId);
   const cat = categoryColors[tx.category] ?? t.muted;
 
   return (
@@ -58,31 +44,16 @@ export default function TransactionDetail() {
           style={StyleSheet.absoluteFill}
         />
       </View>
-      <View style={styles.topRow}>
-        <Pressable
-          onPress={() => {
-            haptics.dismiss();
-            router.back();
-          }}
-          hitSlop={12}
-        >
-          <Glass cornerRadius={20}>
-            <View style={styles.closeButtonInner}>
-              <SF name="xmark" size={18} tint={t.text} />
+      {tx.recurring ? (
+        <View style={styles.topRow}>
+          <Glass cornerRadius={999}>
+            <View style={styles.badgeInner}>
+              <SF name="arrow.triangle.2.circlepath" size={12} tint={t.muted} />
+              <Text style={[styles.badgeText, { color: t.muted }]}>Recurring</Text>
             </View>
           </Glass>
-        </Pressable>
-        <View style={styles.badgeRow}>
-          {tx.recurring ? (
-            <Glass cornerRadius={999}>
-              <View style={styles.badgeInner}>
-                <SF name="arrow.triangle.2.circlepath" size={12} tint={t.muted} />
-                <Text style={[styles.badgeText, { color: t.muted }]}>Recurring</Text>
-              </View>
-            </Glass>
-          ) : null}
         </View>
-      </View>
+      ) : null}
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.hPad, paddingBottom: 60 }}
@@ -228,19 +199,10 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingHorizontal: spacing.hPad,
     paddingTop: 16,
   },
-  closeButtonWrap: { width: 36, height: 36 },
-  closeButtonInner: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeRow: { flexDirection: "row", gap: 8 },
   badgeInner: {
     flexDirection: "row",
     alignItems: "center",
