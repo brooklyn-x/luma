@@ -5,7 +5,7 @@
     "scheme": "luma",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./src/assets/icons/icon1.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
