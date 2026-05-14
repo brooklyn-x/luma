@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { TransactionCard } from "@/components/feed/transaction-card";
 import type { Transaction } from "@/data/types";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { spacing, typography, useTheme } from "@/theme";
 import { formatRelativeDay } from "@/utils/format";
 
@@ -14,6 +15,8 @@ type Row =
 
 export default function TimelineIndex() {
   const t = useTheme();
+  const topPad = useTabScreenTopPadding();
+  const bottomPad = useTabScreenBottomPadding();
   const { data } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
 
@@ -45,8 +48,9 @@ export default function TimelineIndex() {
         keyExtractor={(r) => r.key}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
+          paddingTop: topPad,
           paddingHorizontal: spacing.hPad,
-          paddingBottom: 60,
+          paddingBottom: bottomPad,
         }}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         renderItem={({ item }) =>

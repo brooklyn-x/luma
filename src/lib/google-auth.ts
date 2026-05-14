@@ -46,7 +46,14 @@ function getRedirectUri(clientId: string): string {
     return `${scheme}:/oauth2redirect`;
   }
   if (Platform.OS === "android") {
-    return AuthSession.makeRedirectUri({ scheme: "luma", path: "oauthredirect" });
+    // Google's Android OAuth client only accepts the reversed-client-id scheme
+    // even when Custom URI Scheme is enabled. Must match the intent filter in app.json.
+    const reversed = env.googleAndroidClientId
+      .replace(/\.apps\.googleusercontent\.com$/, "")
+      .split(".")
+      .reverse()
+      .join(".");
+    return `com.googleusercontent.apps.${reversed}:/oauthredirect`;
   }
   return AuthSession.makeRedirectUri({
     scheme: "luma",

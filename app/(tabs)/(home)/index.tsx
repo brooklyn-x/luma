@@ -13,6 +13,7 @@ import {
   selectTransactions,
   useTransactions,
 } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { useAuthStore } from "@/stores/auth-store";
 import { categoryColors, spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatTime } from "@/utils/format";
@@ -35,6 +36,8 @@ function nameFromEmail(email: string | null): string {
 
 export default function HomeIndex() {
   const t = useTheme();
+  const topPad = useTabScreenTopPadding();
+  const bottomPad = useTabScreenBottomPadding();
   const gmailEmail = useAuthStore((s) => s.gmailEmail);
   const name = nameFromEmail(gmailEmail);
   const greeting = timeOfDayGreeting();
@@ -133,7 +136,7 @@ export default function HomeIndex() {
     <ScrollView
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ paddingBottom: 60 }}
+      contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad }}
       showsVerticalScrollIndicator={false}
     >
       <Stack.Screen options={{ title: "Luma" }} />
@@ -178,41 +181,45 @@ export default function HomeIndex() {
         </View>
       ) : null}
 
-      <SectionHeader title="By category" />
-      <View style={styles.donutWrap}>
-        <CategoryDonutChart data={slices} total={total} size={240} thickness={26} />
-      </View>
-      <View style={styles.legendWrap}>
-        <View
-          style={[
-            styles.legendCard,
-            { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-          ]}
-        >
-          {slices.map((s, idx) => {
-            const pct = total > 0 ? (s.value / total) * 100 : 0;
-            return (
-              <View key={s.label}>
-                <View style={styles.legendRow}>
-                  <View style={[styles.legendDot, { backgroundColor: s.color }]} />
-                  <Text style={[styles.legendLabel, { color: t.text }]}>{s.label}</Text>
-                  <Text style={[styles.legendPct, { color: t.muted }]}>
-                    {pct < 1 ? "<1%" : `${Math.round(pct)}%`}
-                  </Text>
-                  <Text style={[styles.legendValue, { color: t.text }]}>
-                    {formatCurrency(s.value)}
-                  </Text>
-                </View>
-                {idx < slices.length - 1 ? (
-                  <View
-                    style={[styles.legendSeparator, { backgroundColor: t.tileBorder }]}
-                  />
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      </View>
+      {slices.length > 0 ? (
+        <>
+          <SectionHeader title="By category" />
+          <View style={styles.donutWrap}>
+            <CategoryDonutChart data={slices} total={total} size={240} thickness={26} />
+          </View>
+          <View style={styles.legendWrap}>
+            <View
+              style={[
+                styles.legendCard,
+                { backgroundColor: t.tileFill, borderColor: t.tileBorder },
+              ]}
+            >
+              {slices.map((s, idx) => {
+                const pct = total > 0 ? (s.value / total) * 100 : 0;
+                return (
+                  <View key={s.label}>
+                    <View style={styles.legendRow}>
+                      <View style={[styles.legendDot, { backgroundColor: s.color }]} />
+                      <Text style={[styles.legendLabel, { color: t.text }]}>{s.label}</Text>
+                      <Text style={[styles.legendPct, { color: t.muted }]}>
+                        {pct < 1 ? "<1%" : `${Math.round(pct)}%`}
+                      </Text>
+                      <Text style={[styles.legendValue, { color: t.text }]}>
+                        {formatCurrency(s.value)}
+                      </Text>
+                    </View>
+                    {idx < slices.length - 1 ? (
+                      <View
+                        style={[styles.legendSeparator, { backgroundColor: t.tileBorder }]}
+                      />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </>
+      ) : null}
 
       <SectionHeader
         title="Top merchants"

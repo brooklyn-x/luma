@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SF } from "@/components/ui/sf";
 import { useSyncMutation } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore, type ThemeMode } from "@/stores/theme-store";
@@ -19,6 +20,8 @@ import { colors, spacing, typography, useIsDark, useTheme, type Palette } from "
 export default function SettingsIndex() {
   const t = useTheme();
   const isDark = useIsDark();
+  const topPad = useTabScreenTopPadding();
+  const bottomPad = useTabScreenBottomPadding();
   const { gmailEmail, disconnect } = useAuthStore();
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
@@ -46,7 +49,7 @@ export default function SettingsIndex() {
     <ScrollView
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ paddingBottom: 60 }}
+      contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottomPad }}
       showsVerticalScrollIndicator={false}
     >
       <Stack.Screen options={{ title: "Settings" }} />

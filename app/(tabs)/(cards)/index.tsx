@@ -4,11 +4,14 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { CardTile } from "@/components/cards/card-tile";
 import { deriveCards } from "@/data/cards";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
 import { spacing, typography, useTheme } from "@/theme";
 
 export default function CardsIndex() {
   const t = useTheme();
+  const topPad = useTabScreenTopPadding();
+  const bottomPad = useTabScreenBottomPadding();
   const { data, isLoading, isError, refetch } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
   const cards = useMemo(() => deriveCards(transactions), [transactions]);
@@ -59,7 +62,7 @@ export default function CardsIndex() {
     <ScrollView
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={[styles.scroll, { paddingBottom: 60 }]}
+      contentContainerStyle={[styles.scroll, { paddingTop: topPad, paddingBottom: bottomPad }]}
       showsVerticalScrollIndicator={false}
     >
       <Stack.Screen options={{ title: "Cards" }} />

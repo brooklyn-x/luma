@@ -12,6 +12,7 @@ import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { merchants } from "@/data/merchants";
 import type { Category } from "@/data/types";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
 import { categoryColors, spacing, typography, useTheme } from "@/theme";
 import { displayName } from "@/utils/merchant-display";
@@ -27,6 +28,7 @@ type Row = {
 
 export default function MerchantsList() {
   const t = useTheme();
+  const bottomPad = useTabScreenBottomPadding();
   const { data } = useTransactions();
   const txs = useMemo(() => selectTransactions(data), [data]);
 
@@ -71,7 +73,7 @@ export default function MerchantsList() {
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.scroll, { paddingBottom: 60 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
         <View

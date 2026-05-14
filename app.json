@@ -10,12 +10,13 @@
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "resizeMode": "cover",
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.brook-luma.ios",
+      "buildNumber": "11",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -31,14 +32,31 @@
         ]
       }
     },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "translucent": false,
+      "backgroundColor": "#000000"
+    },
     "android": {
       "package": "com.luma.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0B0B0D"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "com.googleusercontent.apps.81386467172-0vquu07ke8jduudaqh4r1du0cqhl12ed"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -51,12 +69,20 @@
       [
         "expo-build-properties",
         {
-          "ios": { "deploymentTarget": "26.0" }
+          "ios": {
+            "deploymentTarget": "26.0"
+          }
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d8fdc8fd-65d2-4625-b4c2-e68efca976c8"
+      }
     }
   }
 }

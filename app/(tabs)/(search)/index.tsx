@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { merchants } from "@/data/merchants";
 import type { Category } from "@/data/types";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
 import { categoryColors, colors, spacing, typography, useTheme } from "@/theme";
 
@@ -22,6 +23,8 @@ const TYPE_FILTERS: { key: TypeFilter; label: string; tint: string }[] = [
 
 export default function SearchIndex() {
   const t = useTheme();
+  const topPad = useTabScreenTopPadding();
+  const bottomPad = useTabScreenBottomPadding();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
   const { data } = useTransactions();
@@ -67,7 +70,8 @@ export default function SearchIndex() {
       style={{ flex: 1 }}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{
-        paddingBottom: 60,
+        paddingTop: topPad,
+        paddingBottom: bottomPad,
       }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"

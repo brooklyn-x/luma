@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   PlatformColor,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,8 +21,11 @@ import type { Transaction } from "@/data/types";
 import {
   selectActiveBills,
   selectTransactions,
+  useSyncMutation,
   useTransactions,
 } from "@/hooks/use-transactions";
+import { useTabScreenBottomPadding } from "@/lib/tab-safe-area";
+import { haptics } from "@/services/haptics";
 import { spacing, typography, useTheme } from "@/theme";
 import { formatCurrency, formatRelativeDay } from "@/utils/format";
 
@@ -61,10 +65,18 @@ function daysInMonthOf(ym: YearMonth) {
 
 export default function CardDetail() {
   const t = useTheme();
+  const bottomPad = useTabScreenBottomPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
   const cards = useMemo(() => deriveCards(transactions), [transactions]);
+
+  const syncMutation = useSyncMutation();
+  const onRefresh = useCallback(() => {
+    syncMutation.mutate(undefined, {
+      onSuccess: () => haptics.success(),
+    });
+  }, [syncMutation]);
   const card = useMemo(
     () => (id ? cards.find((c) => c.id === id) : undefined),
     [cards, id]
@@ -219,9 +231,16 @@ export default function CardDetail() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
           paddingHorizontal: spacing.hPad,
-          paddingBottom: 60,
+          paddingBottom: bottomPad,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={syncMutation.isPending}
+            onRefresh={onRefresh}
+            tintColor={t.muted}
+          />
+        }
       >
         <View style={styles.heroBlock}>
           <CardTileLarge
