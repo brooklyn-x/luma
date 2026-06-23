@@ -25,7 +25,6 @@ const groupSep = new Intl.NumberFormat("en-IN");
 export default function Syncing() {
   const t = useTheme();
   const cardShadow = useCardShadow();
-  const check = t.limeMid;
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ full?: string }>();
   const force = params.full === "1";
@@ -136,7 +135,7 @@ export default function Syncing() {
           </Text>
         ) : (
           sorted.map((entry) => (
-            <SortCard key={entry.id} entry={entry} t={t} shadow={cardShadow} check={check} />
+            <SortCard key={entry.id} entry={entry} t={t} shadow={cardShadow} />
           ))
         )}
       </ScrollView>
@@ -148,12 +147,10 @@ function SortCard({
   entry,
   t,
   shadow,
-  check,
 }: {
   entry: SyncLogEntry;
   t: Palette;
   shadow: string;
-  check: string;
 }) {
   const name = entry.merchantName ?? entry.merchantId ?? "Receipt";
   const catColor = entry.category ? categoryColors[entry.category] : undefined;
