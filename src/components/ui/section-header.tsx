@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { fonts } from "@/lib/fonts";
 import { haptics } from "@/services/haptics";
-import { colors, spacing, typography, useTheme } from "@/theme";
+import { spacing, typography, useTheme } from "@/theme";
 
 type Props = {
   title: string;
@@ -21,7 +22,7 @@ export function SectionHeader({ title, actionLabel, onAction }: Props) {
           }}
           hitSlop={12}
         >
-          <Text style={[styles.action, { color: colors.blue }]}>{actionLabel}</Text>
+          <Text style={[styles.action, { color: t.text }]}>{actionLabel}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -37,6 +38,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl,
     paddingBottom: spacing.md,
   },
-  title: { ...typography.h3 },
-  action: { ...typography.caption },
+  title: { ...typography.h3, fontWeight: "800", letterSpacing: -0.3 },
+  action: { ...typography.caption, fontWeight: "700", fontSize: 13.5 },
 });

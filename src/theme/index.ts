@@ -11,4 +11,4 @@ export { typography, type TypographyKey } from "./typography";
 export { radius } from "./radius";
 export { shadows } from "./shadows";
 export { spacing } from "./spacing";
-export { useTheme, useIsDark } from "./use-theme";
+export { useTheme, useIsDark, useCardShadow, useChipShadow } from "./use-theme";

@@ -1,14 +1,29 @@
 import { Stack } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { TransactionCard } from "@/components/feed/transaction-card";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SF } from "@/components/ui/sf";
 import { merchants } from "@/data/merchants";
 import type { Category } from "@/data/types";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
 import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
-import { categoryColors, colors, spacing, typography, useTheme } from "@/theme";
+import {
+  categoryColors,
+  colors,
+  spacing,
+  typography,
+  useCardShadow,
+  useChipShadow,
+  useTheme,
+} from "@/theme";
 
 const RECENT = ["Swiggy", "Uber", "Subscriptions", "Food", "March"];
 const CATEGORIES: Category[] = ["Food", "Shopping", "Travel", "Bills", "Entertainment"];
@@ -23,19 +38,14 @@ const TYPE_FILTERS: { key: TypeFilter; label: string; tint: string }[] = [
 
 export default function SearchIndex() {
   const t = useTheme();
+  const cardShadow = useCardShadow();
+  const chipShadow = useChipShadow();
   const topPad = useTabScreenTopPadding();
   const bottomPad = useTabScreenBottomPadding();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(null);
   const { data } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
-
-  const onChangeText = useCallback(
-    (e: { nativeEvent: { text: string } }) => {
-      setQuery(e.nativeEvent.text);
-    },
-    []
-  );
 
   const filterLabel = typeFilter
     ? TYPE_FILTERS.find((f) => f.key === typeFilter)?.label
@@ -65,6 +75,12 @@ export default function SearchIndex() {
 
   const showResults = query.trim().length > 0 || !!typeFilter;
 
+  const clear = () => {
+    haptics.dismiss();
+    setQuery("");
+    setTypeFilter(null);
+  };
+
   return (
     <ScrollView
       style={{ flex: 1 }}
@@ -76,21 +92,32 @@ export default function SearchIndex() {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
-      <Stack.Screen
-        options={{
-          title: "Search",
-          headerSearchBarOptions: {
-            placeholder: "Search transactions",
-            onChangeText,
-            hideWhenScrolling: false,
-            obscureBackground: false,
-          },
-        }}
-      />
+      <Stack.Screen options={{ title: "Search" }} />
+
+      {/* Title */}
+      <Text style={[styles.screenTitle, { color: t.text }]}>Search</Text>
+
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
+        <View style={[styles.searchBar, { backgroundColor: t.card, boxShadow: cardShadow }]}>
+          <SF name="magnifyingglass" size={19} tint={t.muted} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Merchant, amount or category…"
+            placeholderTextColor={t.muted2}
+            style={[styles.searchInput, { color: t.text }]}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      </View>
 
       {!showResults ? (
         <>
-          <SectionHeader title="Recent" />
+          <Text style={[styles.sectionTitle, { color: t.text }]}>Recent</Text>
           <View style={styles.chipsWrap}>
             {RECENT.map((r) => (
               <Pressable
@@ -99,17 +126,14 @@ export default function SearchIndex() {
                   haptics.tap();
                   setQuery(r);
                 }}
-                style={[
-                  styles.chip,
-                  { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-                ]}
+                style={[styles.chip, { backgroundColor: t.card, boxShadow: chipShadow }]}
               >
                 <Text style={[styles.chipText, { color: t.text }]}>{r}</Text>
               </Pressable>
             ))}
           </View>
 
-          <SectionHeader title="Type" />
+          <Text style={[styles.sectionTitle, { color: t.text }]}>Type</Text>
           <View style={styles.chipsWrap}>
             {TYPE_FILTERS.map((f) => (
               <Pressable
@@ -118,10 +142,7 @@ export default function SearchIndex() {
                   haptics.tap();
                   setTypeFilter(f.key);
                 }}
-                style={[
-                  styles.chip,
-                  { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-                ]}
+                style={[styles.chip, { backgroundColor: t.card, boxShadow: chipShadow }]}
               >
                 <View style={[styles.chipDot, { backgroundColor: f.tint }]} />
                 <Text style={[styles.chipText, { color: t.text }]}>{f.label}</Text>
@@ -129,7 +150,7 @@ export default function SearchIndex() {
             ))}
           </View>
 
-          <SectionHeader title="Browse" />
+          <Text style={[styles.sectionTitle, { color: t.text }]}>Browse</Text>
           <View style={styles.chipsWrap}>
             {CATEGORIES.map((cat) => (
               <Pressable
@@ -138,10 +159,7 @@ export default function SearchIndex() {
                   haptics.tap();
                   setQuery(cat);
                 }}
-                style={[
-                  styles.chip,
-                  { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-                ]}
+                style={[styles.chip, { backgroundColor: t.card, boxShadow: chipShadow }]}
               >
                 <View style={[styles.chipDot, { backgroundColor: categoryColors[cat] }]} />
                 <Text style={[styles.chipText, { color: t.text }]}>{cat}</Text>
@@ -159,16 +177,8 @@ export default function SearchIndex() {
           <Text style={[styles.emptyBody, { color: t.muted }]}>
             Try a merchant, category, or card name.
           </Text>
-          <Pressable
-            onPress={() => {
-              haptics.dismiss();
-              setQuery("");
-              setTypeFilter(null);
-            }}
-            hitSlop={10}
-            style={styles.clearWrap}
-          >
-            <Text style={[styles.clearLink, { color: colors.blue }]}>Clear search</Text>
+          <Pressable onPress={clear} hitSlop={10} style={styles.clearWrap}>
+            <Text style={[styles.clearLink, { color: t.limeMid }]}>Clear search</Text>
           </Pressable>
         </View>
       ) : (
@@ -179,20 +189,18 @@ export default function SearchIndex() {
               {filterLabel ? ` · ${filterLabel}` : ""}
               {query ? ` · "${query}"` : ""}
             </Text>
-            <Pressable
-              onPress={() => {
-                haptics.dismiss();
-                setQuery("");
-                setTypeFilter(null);
-              }}
-              hitSlop={10}
-            >
-              <Text style={[styles.clearLink, { color: colors.blue }]}>Clear</Text>
+            <Pressable onPress={clear} hitSlop={10}>
+              <Text style={[styles.clearLink, { color: t.limeMid }]}>Clear</Text>
             </Pressable>
           </View>
-          <View style={styles.resultsList}>
-            {results.map((tr) => (
-              <TransactionCard key={tr.id} transaction={tr} />
+          <View style={[styles.resultsCard, { backgroundColor: t.card, boxShadow: cardShadow }]}>
+            {results.map((tr, idx) => (
+              <View key={tr.id}>
+                <TransactionCard transaction={tr} embedded />
+                {idx < results.length - 1 ? (
+                  <View style={[styles.divider, { backgroundColor: t.divider }]} />
+                ) : null}
+              </View>
             ))}
           </View>
         </View>
@@ -202,10 +210,44 @@ export default function SearchIndex() {
 }
 
 const styles = StyleSheet.create({
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    paddingHorizontal: spacing.hPad,
+    paddingTop: 10,
+  },
+  searchWrap: {
+    paddingHorizontal: spacing.hPad,
+    marginTop: 16,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    height: 52,
+    borderRadius: 18,
+    borderCurve: "continuous",
+    paddingHorizontal: 16,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+    padding: 0,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: -0.1,
+    paddingHorizontal: spacing.hPad,
+    marginTop: 24,
+    marginBottom: 12,
+  },
   chipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 9,
     paddingHorizontal: spacing.hPad,
   },
   chip: {
@@ -213,13 +255,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 999,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
   },
   chipDot: { width: 7, height: 7, borderRadius: 3.5 },
-  chipText: { ...typography.caption, fontSize: 14, fontWeight: "500" },
+  chipText: { fontSize: 13, fontWeight: "700" },
   hint: {
     ...typography.caption,
     fontSize: 13,
@@ -235,14 +276,20 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { ...typography.h3 },
   emptyBody: { ...typography.caption, textAlign: "center", lineHeight: 20 },
-  resultsWrap: { paddingHorizontal: spacing.hPad, paddingTop: 8, gap: 10 },
+  resultsWrap: { paddingHorizontal: spacing.hPad, paddingTop: 20, gap: 12 },
   resultsHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
-  resultsList: { gap: 10 },
+  resultsCard: {
+    borderRadius: 24,
+    borderCurve: "continuous",
+    paddingHorizontal: 16,
+    paddingVertical: 2,
+  },
+  divider: { height: StyleSheet.hairlineWidth },
   count: {
     ...typography.micro,
     textTransform: "uppercase",
@@ -253,7 +300,7 @@ const styles = StyleSheet.create({
   clearLink: {
     ...typography.caption,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   clearWrap: { marginTop: 8 },
 });

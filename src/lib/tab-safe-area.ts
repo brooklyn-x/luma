@@ -1,10 +1,6 @@
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const FLOATING_BAR_HEIGHT = 64;
-const FLOATING_BAR_BOTTOM_MARGIN = 12;
-const FLOATING_BAR_CLEARANCE = 16;
-
 /**
  * Top inset for tab-root ScrollViews.
  *
@@ -21,20 +17,11 @@ export function useTabScreenTopPadding(extra = 8): number {
 /**
  * Bottom padding for tab-root ScrollViews.
  *
- * Android renders a floating tab bar (see app/(tabs)/_layout.tsx) so content
- * must scroll past the bar's height + its margin + the system inset. iOS
- * keeps the flat bar where react-navigation pads itself, so we return the
- * baseline value used previously.
+ * The tab bar is part of the layout flow (not absolutely positioned), so
+ * React Navigation constrains content above it automatically. This padding
+ * just adds a small visual gap so the last list item isn't flush against
+ * the tab bar edge.
  */
 export function useTabScreenBottomPadding(): number {
-  const insets = useSafeAreaInsets();
-  if (Platform.OS === "android") {
-    return (
-      FLOATING_BAR_HEIGHT +
-      FLOATING_BAR_BOTTOM_MARGIN +
-      insets.bottom +
-      FLOATING_BAR_CLEARANCE
-    );
-  }
-  return 60;
+  return 16;
 }

@@ -37,6 +37,12 @@ const SF_TO_IONICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   "xmark.octagon.fill": "alert-circle",
   "checkmark.circle.fill": "checkmark-circle",
   "minus.circle": "remove-circle-outline",
+  "plus": "add",
+  "bag.fill": "bag",
+  "fork.knife": "restaurant",
+  "airplane": "airplane",
+  "doc.text.fill": "document-text",
+  "film.fill": "film",
 };
 
 export function SF({ name, size = 20, tint }: Props) {

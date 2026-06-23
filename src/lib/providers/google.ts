@@ -74,6 +74,7 @@ export const googleProvider: EmailProvider = {
   disconnect,
   listMessageIds,
   getMessage,
+  concurrency: 10,
 };
 
 export async function isGoogleConnected(): Promise<boolean> {

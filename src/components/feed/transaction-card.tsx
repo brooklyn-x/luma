@@ -16,9 +16,11 @@ import { formatCurrency, formatTime } from "@/utils/format";
 type Props = {
   transaction: Transaction;
   showTime?: boolean;
+  /** Render without card chrome (bg/border/radius) so it can sit inside a parent card. */
+  embedded?: boolean;
 };
 
-export function TransactionCard({ transaction, showTime = true }: Props) {
+export function TransactionCard({ transaction, showTime = true, embedded }: Props) {
   const t = useTheme();
   const scale = useSharedValue(1);
   const merchant = merchants[transaction.merchantId];
@@ -43,10 +45,13 @@ export function TransactionCard({ transaction, showTime = true }: Props) {
             <View
               style={[
                 styles.row,
-                {
-                  backgroundColor: t.tileFill,
-                  borderColor: t.tileBorder,
-                },
+                embedded
+                  ? styles.rowEmbedded
+                  : {
+                      backgroundColor: t.tileFill,
+                      borderColor: t.tileBorder,
+                      borderWidth: StyleSheet.hairlineWidth,
+                    },
               ]}
             >
               <MerchantLogo merchantId={transaction.merchantId} size={44} />
@@ -142,12 +147,16 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 13,
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 20,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
+  },
+  rowEmbedded: {
+    paddingHorizontal: 2,
+    paddingVertical: 11,
+    borderRadius: 0,
   },
   middle: { flex: 1, gap: 4 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },

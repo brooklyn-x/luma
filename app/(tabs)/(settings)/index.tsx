@@ -10,16 +10,18 @@ import {
   View,
 } from "react-native";
 import { SF } from "@/components/ui/sf";
+import { fonts } from "@/lib/fonts";
 import { useSyncMutation } from "@/hooks/use-transactions";
 import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
 import { useAuthStore } from "@/stores/auth-store";
 import { useThemeStore, type ThemeMode } from "@/stores/theme-store";
-import { colors, spacing, typography, useIsDark, useTheme, type Palette } from "@/theme";
+import { colors, spacing, typography, useCardShadow, useIsDark, useTheme, type Palette } from "@/theme";
 
 export default function SettingsIndex() {
   const t = useTheme();
   const isDark = useIsDark();
+  const cardShadow = useCardShadow();
   const topPad = useTabScreenTopPadding();
   const bottomPad = useTabScreenBottomPadding();
   const { gmailEmail, disconnect } = useAuthStore();
@@ -54,13 +56,15 @@ export default function SettingsIndex() {
     >
       <Stack.Screen options={{ title: "Settings" }} />
 
+      <Text style={[styles.screenTitle, { color: t.text }]}>Settings</Text>
+
       <View style={styles.section}>
         <View
-          style={[styles.card, { backgroundColor: t.tileFill, borderColor: t.tileBorder }]}
+          style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
         >
           <View style={[styles.row, { paddingVertical: 18 }]}>
-            <View style={[styles.iconWrap, { backgroundColor: "rgba(91,140,255,0.22)", borderColor: t.tileBorder }]}>
-              <SF name="envelope.fill" size={18} tint={colors.blue} />
+            <View style={styles.iconWrap}>
+              <SF name="envelope.fill" size={21} tint={colors.blue} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: t.text }]}>Connected Gmail</Text>
@@ -68,7 +72,6 @@ export default function SettingsIndex() {
                 {gmailEmail ?? "Not connected"}
               </Text>
             </View>
-            <View style={[styles.dot, { backgroundColor: t.green }]} />
           </View>
         </View>
       </View>
@@ -76,7 +79,7 @@ export default function SettingsIndex() {
       <SectionTitle label="Sync" t={t} />
       <View style={styles.section}>
         <View
-          style={[styles.card, { backgroundColor: t.tileFill, borderColor: t.tileBorder }]}
+          style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
         >
           <ActionRow
             t={t}
@@ -108,7 +111,7 @@ export default function SettingsIndex() {
       <SectionTitle label="Preferences" t={t} />
       <View style={styles.section}>
         <View
-          style={[styles.card, { backgroundColor: t.tileFill, borderColor: t.tileBorder }]}
+          style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
         >
           <ToggleRow
             t={t}
@@ -134,7 +137,7 @@ export default function SettingsIndex() {
       <SectionTitle label="Privacy" t={t} />
       <View style={styles.section}>
         <View
-          style={[styles.card, { backgroundColor: t.tileFill, borderColor: t.tileBorder }]}
+          style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
         >
           <ActionRow
             t={t}
@@ -154,16 +157,11 @@ export default function SettingsIndex() {
           }}
         >
           <View
-            style={[styles.card, { backgroundColor: t.tileFill, borderColor: t.tileBorder }]}
+            style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
           >
             <View style={styles.row}>
-              <View
-                style={[
-                  styles.iconWrap,
-                  { backgroundColor: "rgba(239,68,68,0.18)", borderColor: t.tileBorder },
-                ]}
-              >
-                <SF name="rectangle.portrait.and.arrow.right" size={18} tint={t.red} />
+              <View style={styles.iconWrap}>
+                <SF name="rectangle.portrait.and.arrow.right" size={21} tint={t.red} />
               </View>
               <Text style={[styles.label, { color: t.red, flex: 1 }]}>Disconnect Gmail</Text>
             </View>
@@ -177,7 +175,7 @@ export default function SettingsIndex() {
 }
 
 function SectionTitle({ label, t }: { label: string; t: Palette }) {
-  return <Text style={[styles.sectionTitle, { color: t.muted }]}>{label}</Text>;
+  return <Text style={[styles.sectionTitle, { color: t.text }]}>{label}</Text>;
 }
 
 function ActionRow({
@@ -195,13 +193,8 @@ function ActionRow({
 }) {
   return (
     <Pressable onPress={onPress} style={styles.row}>
-      <View
-        style={[
-          styles.iconWrap,
-          { backgroundColor: t.tileHighlight, borderColor: t.tileBorder },
-        ]}
-      >
-        <SF name={symbol} size={18} tint={t.text} />
+      <View style={styles.iconWrap}>
+        <SF name={symbol} size={21} tint={t.text} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.label, { color: t.text }]}>{label}</Text>
@@ -238,13 +231,8 @@ function ToggleRow({
 
   return (
     <View style={styles.row}>
-      <View
-        style={[
-          styles.iconWrap,
-          { backgroundColor: t.tileHighlight, borderColor: t.tileBorder },
-        ]}
-      >
-        <SF name={symbol} size={18} tint={t.text} />
+      <View style={styles.iconWrap}>
+        <SF name={symbol} size={21} tint={t.text} />
       </View>
       {onLabelPress ? (
         <Pressable onPress={onLabelPress} style={{ flex: 1 }} hitSlop={6}>
@@ -256,7 +244,7 @@ function ToggleRow({
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: t.tileBorder, true: colors.blue }}
+        trackColor={{ false: t.tileBorder, true: t.lime }}
         thumbColor="#fff"
         ios_backgroundColor={t.tileBorder}
       />
@@ -265,23 +253,29 @@ function ToggleRow({
 }
 
 function Divider({ t }: { t: Palette }) {
-  return <View style={[styles.divider, { backgroundColor: t.tileBorder }]} />;
+  return <View style={[styles.divider, { backgroundColor: t.divider }]} />;
 }
 
 const styles = StyleSheet.create({
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    paddingHorizontal: spacing.hPad,
+    paddingTop: 4,
+  },
   section: { paddingHorizontal: spacing.hPad, marginTop: 12 },
   card: {
-    borderRadius: 20,
+    borderRadius: 24,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
   },
   sectionTitle: {
-    ...typography.micro,
-    textTransform: "uppercase",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
     paddingHorizontal: spacing.hPad,
-    paddingTop: 22,
-    paddingBottom: 8,
+    paddingTop: 26,
+    paddingBottom: 10,
   },
   row: {
     flexDirection: "row",
@@ -291,25 +285,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    borderCurve: "continuous",
+    width: 26,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
   },
-  label: { ...typography.body, fontWeight: "500" },
+  label: { ...typography.body, fontFamily: fonts.medium, fontWeight: "500" },
   subLabel: { ...typography.caption, marginTop: 2 },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 64,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    boxShadow: "0 0 6px rgba(52,211,153,0.7)",
+    marginHorizontal: 18,
   },
   version: {
     ...typography.micro,

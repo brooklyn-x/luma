@@ -1,59 +1,66 @@
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ContinueButton } from "@/components/onboarding/continue-button";
 import { FeatureRow } from "@/components/onboarding/feature-row";
-import { HeroIcon } from "@/components/onboarding/hero-icon";
 import { SF } from "@/components/ui/sf";
-import { colors, spacing, typography, useTheme } from "@/theme";
+import { spacing, typography, useIsDark, useTheme } from "@/theme";
 
 const features = [
   {
     symbol: "envelope.fill",
-    tint: colors.blue,
-    title: "Auto-detected from your inbox",
-    body: "Receipts read straight from your email. No manual entry.",
-  },
-  {
-    symbol: "arrow.triangle.2.circlepath",
-    tint: colors.purple,
-    title: "Subscriptions surfaced",
-    body: "We catch recurring charges so nothing slips by.",
+    title: "Auto-sync from Gmail",
+    body: "Receipts read straight from your inbox. No manual entry, ever.",
   },
   {
     symbol: "chart.pie.fill",
-    tint: colors.pink,
     title: "Spend by category",
-    body: "Food, travel, bills — see where your money goes.",
+    body: "Food, travel, bills — see where it really goes.",
   },
   {
-    symbol: "lock.shield",
-    tint: colors.green,
-    title: "Private & on-device",
-    body: "Read-only mailbox access. Tokens stored securely on your phone.",
+    symbol: "arrow.triangle.2.circlepath",
+    title: "Bills & subscriptions",
+    body: "We catch recurring charges so you never miss a renewal.",
   },
 ];
 
 export default function Onboarding() {
   const t = useTheme();
+  const isDark = useIsDark();
   const insets = useSafeAreaInsets();
+  const accent = isDark ? t.limeMid : t.lime;
 
   return (
     <View style={[styles.root, { backgroundColor: t.background }]}>
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 220 },
+          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 260 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroWrap}>
-          <HeroIcon symbol="sparkles" tint={colors.blue} />
-        </View>
+        <LinearGradient
+          colors={[t.lime, t.limeStrong]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.heroWatermark} pointerEvents="none">
+            <Text style={styles.heroWatermarkText}>{"₹ ".repeat(60)}</Text>
+          </View>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroLabel}>SPENT IN JUNE</Text>
+            <Text style={styles.heroAmount}>₹84,290</Text>
+          </View>
+        </LinearGradient>
 
-        <Text style={[styles.title, { color: t.text }]}>Welcome to Luma</Text>
+        <Text style={[styles.title, { color: t.text }]}>
+          Your inbox is a bank statement.
+        </Text>
         <Text style={[styles.subtitle, { color: t.muted }]}>
-          Track every rupee, automatically. Connect your inbox and Luma does the rest.
+          Luma reads the receipts already in your Gmail and turns them into a clean
+          money timeline.
         </Text>
 
         <View style={styles.features}>
@@ -71,7 +78,7 @@ export default function Onboarding() {
       >
         <ContinueButton
           label="Continue with Google"
-          icon={<SF name="envelope.fill" size={18} tint="#FFFFFF" />}
+          icon={<SF name="envelope.fill" size={18} tint={accent} />}
           onPress={() =>
             router.push({
               pathname: "/connect-permission",
@@ -101,23 +108,54 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { paddingHorizontal: spacing.hPad },
-  heroWrap: { alignItems: "center", marginBottom: 24 },
-  title: {
-    ...typography.h2,
-    fontSize: 28,
+  hero: {
+    height: 190,
+    borderRadius: 26,
+    borderCurve: "continuous",
+    overflow: "hidden",
+    justifyContent: "flex-end",
+    padding: 22,
+  },
+  heroWatermark: {
+    ...StyleSheet.absoluteFillObject,
+    transform: [{ rotate: "-8deg" }, { scale: 1.3 }],
+  },
+  heroWatermarkText: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 1,
+    lineHeight: 30,
+    color: "rgba(0,0,0,0.07)",
+  },
+  heroContent: { position: "relative" },
+  heroLabel: {
+    fontSize: 13,
     fontWeight: "700",
-    textAlign: "center",
-    letterSpacing: -0.4,
+    letterSpacing: 0.4,
+    color: "rgba(26,46,5,0.7)",
+  },
+  heroAmount: {
+    fontSize: 38,
+    fontWeight: "800",
+    letterSpacing: -1.5,
+    marginTop: 2,
+    color: "#1A2E05",
+    fontVariant: ["tabular-nums"],
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    lineHeight: 35,
+    marginTop: 28,
   },
   subtitle: {
     ...typography.body,
-    fontSize: 16,
+    fontSize: 15,
     lineHeight: 22,
-    textAlign: "center",
     marginTop: 10,
-    paddingHorizontal: 12,
   },
-  features: { marginTop: 36, gap: 4 },
+  features: { marginTop: 28, gap: 4 },
   footer: {
     position: "absolute",
     bottom: 0,

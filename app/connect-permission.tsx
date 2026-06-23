@@ -10,30 +10,26 @@ import { SF } from "@/components/ui/sf";
 import type { Provider } from "@/lib/email-provider";
 import { haptics } from "@/services/haptics";
 import { useAuthStore } from "@/stores/auth-store";
-import { colors, spacing, typography, useTheme } from "@/theme";
+import { spacing, typography, useIsDark, useTheme } from "@/theme";
 
 const trustItems = [
   {
     symbol: "eye",
-    tint: colors.blue,
     title: "Read-only access",
     body: "Luma only reads transaction emails. We can't send or modify anything.",
   },
   {
     symbol: "lock.fill",
-    tint: colors.purple,
     title: "No password storage",
     body: "Authentication runs through OAuth. We never see your password.",
   },
   {
     symbol: "checkmark.shield",
-    tint: colors.green,
     title: "No OTP scanning",
     body: "Luma ignores OTP-style emails entirely.",
   },
   {
     symbol: "lock.rectangle.stack",
-    tint: colors.pink,
     title: "Encrypted on device",
     body: "Tokens kept in iOS Keychain / Android Keystore. Nothing leaves your phone.",
   },
@@ -55,6 +51,8 @@ const COPY: Record<Provider, { title: string; subtitle: string; cta: string }> =
 
 export default function ConnectPermission() {
   const t = useTheme();
+  const isDark = useIsDark();
+  const accent = isDark ? t.limeMid : t.lime;
   const insets = useSafeAreaInsets();
   const { provider } = useLocalSearchParams<{ provider?: Provider }>();
   const resolvedProvider: Provider =
@@ -107,7 +105,13 @@ export default function ConnectPermission() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroWrap}>
-          <HeroIcon symbol="envelope.fill" tint={colors.blue} />
+          <HeroIcon
+            symbol="envelope.fill"
+            tint={t.text}
+            plateSize={84}
+            symbolSize={38}
+            cornerRadius={26}
+          />
         </View>
 
         <Text style={[styles.title, { color: t.text }]}>{copy.title}</Text>
@@ -128,7 +132,7 @@ export default function ConnectPermission() {
       >
         <ContinueButton
           label={busy ? "Connecting…" : copy.cta}
-          icon={<SF name="envelope.fill" size={18} tint="#FFFFFF" />}
+          icon={<SF name="envelope.fill" size={18} tint={accent} />}
           onPress={handleConnect}
         />
         <Pressable

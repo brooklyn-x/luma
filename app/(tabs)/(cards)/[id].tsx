@@ -11,12 +11,11 @@ import {
 } from "react-native";
 import { BillsDueSection } from "@/components/bills/bills-due-section";
 import { CardTileLarge } from "@/components/cards/card-tile-large";
-import { DailySpendChart } from "@/components/cards/daily-spend-chart";
+import { CategoryBreakdown } from "@/components/cards/category-breakdown";
+import { DailySpendBars } from "@/components/cards/daily-spend-bars";
 import { TransactionCard } from "@/components/feed/transaction-card";
-import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { SF } from "@/components/ui/sf";
 import { deriveCards } from "@/data/cards";
-import { merchants } from "@/data/merchants";
 import type { Transaction } from "@/data/types";
 import {
   selectActiveBills,
@@ -26,10 +25,23 @@ import {
 } from "@/hooks/use-transactions";
 import { useTabScreenBottomPadding } from "@/lib/tab-safe-area";
 import { haptics } from "@/services/haptics";
-import { spacing, typography, useTheme } from "@/theme";
+import {
+  spacing,
+  typography,
+  useCardShadow,
+  useChipShadow,
+  useTheme,
+} from "@/theme";
+import {
+  type Cycle,
+  compareCycle,
+  cycleKey,
+  cycleOf,
+  dayInCycle,
+  daysInCycle,
+  sameCycle,
+} from "@/utils/cycle";
 import { formatCurrency, formatRelativeDay } from "@/utils/format";
-
-type YearMonth = { year: number; month: number };
 
 const MONTH_NAMES = [
   "January",
@@ -46,25 +58,10 @@ const MONTH_NAMES = [
   "December",
 ];
 
-function txYearMonth(tx: Transaction): YearMonth {
-  const d = new Date(tx.date);
-  return { year: d.getFullYear(), month: d.getMonth() };
-}
-
-function ymKey(ym: YearMonth) {
-  return `${ym.year}-${ym.month}`;
-}
-
-function ymCompare(a: YearMonth, b: YearMonth) {
-  return a.year !== b.year ? a.year - b.year : a.month - b.month;
-}
-
-function daysInMonthOf(ym: YearMonth) {
-  return new Date(ym.year, ym.month + 1, 0).getDate();
-}
-
 export default function CardDetail() {
   const t = useTheme();
+  const cardShadow = useCardShadow();
+  const chipShadow = useChipShadow();
   const bottomPad = useTabScreenBottomPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data } = useTransactions();
@@ -93,25 +90,23 @@ export default function CardDetail() {
   );
 
   const months = useMemo(() => {
-    const map = new Map<string, YearMonth>();
+    const map = new Map<string, Cycle>();
     cardTxAll.forEach((tx) => {
-      const ym = txYearMonth(tx);
-      map.set(ymKey(ym), ym);
+      const c = cycleOf(tx.date);
+      map.set(cycleKey(c), c);
     });
-    return Array.from(map.values()).sort(ymCompare);
+    return Array.from(map.values()).sort(compareCycle);
   }, [cardTxAll]);
 
-  const [selected, setSelected] = useState<YearMonth | null>(null);
-  const effectiveSelected: YearMonth | null =
+  const [selected, setSelected] = useState<Cycle | null>(null);
+  const effectiveSelected: Cycle | null =
     selected ?? months[months.length - 1] ?? null;
 
   const monthTx = useMemo(() => {
     if (!effectiveSelected) return [];
     return cardTxAll.filter((tx) => {
-      const ym = txYearMonth(tx);
-      return (
-        ym.year === effectiveSelected.year && ym.month === effectiveSelected.month
-      );
+      const c = cycleOf(tx.date);
+      return c.year === effectiveSelected.year && c.month === effectiveSelected.month;
     });
   }, [cardTxAll, effectiveSelected]);
 
@@ -130,13 +125,13 @@ export default function CardDetail() {
 
   const daily = useMemo(() => {
     if (!effectiveSelected) return [];
-    const len = daysInMonthOf(effectiveSelected);
+    const len = daysInCycle(effectiveSelected);
     const arr = Array.from({ length: len }, (_, i) => ({
       day: i + 1,
       amount: 0,
     }));
     monthPurchases.forEach((tx) => {
-      const day = new Date(tx.date).getDate();
+      const day = dayInCycle(tx.date, effectiveSelected);
       if (day >= 1 && day <= len) arr[day - 1].amount += tx.amount;
     });
     return arr;
@@ -175,28 +170,6 @@ export default function CardDetail() {
     return Array.from(groups.values()).sort((a, b) => b.sortKey - a.sortKey);
   }, [monthTx]);
 
-  const topMerchants = useMemo(() => {
-    const map = new Map<
-      string,
-      { id: string; name: string; total: number; count: number }
-    >();
-    monthPurchases.forEach((tx) => {
-      const known = merchants[tx.merchantId];
-      const name = known?.name ?? tx.merchantName ?? tx.merchantId;
-      const key = tx.merchantId;
-      const existing = map.get(key);
-      if (existing) {
-        existing.total += tx.amount;
-        existing.count += 1;
-      } else {
-        map.set(key, { id: key, name, total: tx.amount, count: 1 });
-      }
-    });
-    return Array.from(map.values())
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-  }, [monthPurchases]);
-
   const idx = effectiveSelected
     ? months.findIndex(
         (m) =>
@@ -205,6 +178,15 @@ export default function CardDetail() {
     : -1;
   const canPrev = idx > 0;
   const canNext = idx >= 0 && idx < months.length - 1;
+
+  const isCurrentCycle = effectiveSelected
+    ? sameCycle(effectiveSelected, cycleOf(new Date()))
+    : false;
+  const lastDay = effectiveSelected
+    ? isCurrentCycle
+      ? dayInCycle(new Date().toISOString(), effectiveSelected)
+      : daysInCycle(effectiveSelected)
+    : 0;
 
   if (!card) {
     return (
@@ -221,10 +203,9 @@ export default function CardDetail() {
           headerShown: true,
           headerTransparent: true,
           headerTitle: "",
-          headerBackTitle: "Cards",
           headerTintColor: PlatformColor("label") as unknown as string,
           headerShadowVisible: false,
-          headerBackButtonDisplayMode: "default",
+          headerBackButtonDisplayMode: "minimal",
         }}
       />
       <ScrollView
@@ -259,8 +240,8 @@ export default function CardDetail() {
               style={[
                 styles.monthBtn,
                 {
-                  backgroundColor: t.tileFill,
-                  borderColor: t.tileBorder,
+                  backgroundColor: t.card,
+                  boxShadow: chipShadow,
                   opacity: canPrev ? 1 : 0.35,
                 },
               ]}
@@ -285,8 +266,8 @@ export default function CardDetail() {
               style={[
                 styles.monthBtn,
                 {
-                  backgroundColor: t.tileFill,
-                  borderColor: t.tileBorder,
+                  backgroundColor: t.card,
+                  boxShadow: chipShadow,
                   opacity: canNext ? 1 : 0.35,
                 },
               ]}
@@ -298,62 +279,47 @@ export default function CardDetail() {
 
         {effectiveSelected && monthTx.length > 0 ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: t.muted }]}>
+            <Text style={[styles.sectionTitle, { color: t.text }]}>
               Daily spend
             </Text>
-            <DailySpendChart
-              daily={daily}
-              daysInMonth={daysInMonthOf(effectiveSelected)}
-              tint={card.gradientFrom}
-            />
+            <View
+              style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
+            >
+              <DailySpendBars
+                daily={daily}
+                cycle={effectiveSelected}
+                lastDay={lastDay}
+                isCurrent={isCurrentCycle}
+                tint={card.gradientFrom}
+              />
+            </View>
           </View>
         ) : null}
 
         {cardBills.length > 0 ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: t.muted }]}>
+            <Text style={[styles.sectionTitle, { color: t.text }]}>
               Upcoming bills
             </Text>
             <BillsDueSection bills={cardBills} compact />
           </View>
         ) : null}
 
-        {topMerchants.length > 0 ? (
+        {monthPurchases.length > 0 ? (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: t.muted }]}>
-              Top merchants
+            <Text style={[styles.sectionTitle, { color: t.text }]}>
+              Where it goes
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.merchantsRow}
+            <View
+              style={[styles.card, { backgroundColor: t.card, boxShadow: cardShadow }]}
             >
-              {topMerchants.map((m) => (
-                <View
-                  key={m.id}
-                  style={[
-                    styles.merchantTile,
-                    { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-                  ]}
-                >
-                  <MerchantLogo merchantId={m.id} size={48} />
-                  <Text
-                    style={[styles.merchantName, { color: t.text }]}
-                    numberOfLines={1}
-                  >
-                    {m.name}
-                  </Text>
-                  <Text style={[styles.merchantAmount, { color: t.muted }]}>
-                    {formatCurrency(m.total)}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
+              <CategoryBreakdown transactions={monthPurchases} total={monthTotal} />
+            </View>
           </View>
         ) : null}
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: t.muted }]}>
+          <Text style={[styles.sectionTitle, { color: t.text }]}>
             Transactions
           </Text>
           {monthTx.length === 0 ? (
@@ -369,26 +335,30 @@ export default function CardDetail() {
               {groupedByDay.map((group) => (
                 <View key={group.sortKey} style={styles.dayGroup}>
                   <View style={styles.dayHeader}>
-                    <View
-                      style={[
-                        styles.dayPill,
-                        {
-                          backgroundColor: t.tileFill,
-                          borderColor: t.tileBorder,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.dayLabel, { color: t.muted }]}>
-                        {group.label}
-                      </Text>
-                    </View>
+                    <Text style={[styles.dayLabel, { color: t.muted }]}>
+                      {group.label}
+                    </Text>
                     <Text style={[styles.dayTotal, { color: t.muted }]}>
                       {formatCurrency(group.total)}
                     </Text>
                   </View>
-                  {group.items.map((tx) => (
-                    <TransactionCard key={tx.id} transaction={tx} />
-                  ))}
+                  <View
+                    style={[
+                      styles.dayCard,
+                      { backgroundColor: t.card, boxShadow: cardShadow },
+                    ]}
+                  >
+                    {group.items.map((tx, idx) => (
+                      <View key={tx.id}>
+                        <TransactionCard transaction={tx} embedded />
+                        {idx < group.items.length - 1 ? (
+                          <View
+                            style={[styles.divider, { backgroundColor: t.divider }]}
+                          />
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
                 </View>
               ))}
             </View>
@@ -416,7 +386,6 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -430,45 +399,41 @@ const styles = StyleSheet.create({
   monthMeta: { ...typography.micro, marginTop: 2 },
   section: { marginTop: 22, gap: 12 },
   sectionTitle: {
-    ...typography.micro,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
   },
-  merchantsRow: { gap: 10, paddingVertical: 4 },
-  merchantTile: {
-    width: 92,
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 18,
+  card: {
+    borderRadius: 24,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
   },
-  merchantName: { ...typography.caption, fontWeight: "500", marginTop: 2 },
-  merchantAmount: { ...typography.micro },
   txList: { gap: 18 },
   dayGroup: { gap: 8 },
   dayHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 4,
   },
-  dayPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
+  dayCard: {
+    borderRadius: 22,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
+  divider: { height: StyleSheet.hairlineWidth },
   dayLabel: {
     ...typography.micro,
     textTransform: "uppercase",
-    fontWeight: "600",
+    fontWeight: "700",
     letterSpacing: 0.5,
   },
-  dayTotal: { ...typography.caption, fontVariant: ["tabular-nums"] },
+  dayTotal: {
+    ...typography.caption,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
   emptyMonth: {
     ...typography.body,
     fontSize: 14,

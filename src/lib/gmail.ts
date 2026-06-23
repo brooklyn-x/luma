@@ -22,16 +22,48 @@ export type GmailMessage = {
   labelIds?: string[];
 };
 
+const MAX_RETRIES = 4;
+const MAX_RETRY_AFTER_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfter(header: string | null, attempt: number): number {
+  const fallback = Math.min(MAX_RETRY_AFTER_MS, 500 * 2 ** attempt);
+  if (!header) return fallback;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(MAX_RETRY_AFTER_MS, seconds * 1000);
+  }
+  const dateMs = Date.parse(header);
+  if (!Number.isNaN(dateMs)) {
+    return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, dateMs - Date.now()));
+  }
+  return fallback;
+}
+
 async function gmailFetch<T>(path: string): Promise<T> {
-  const token = await getValidAccessToken();
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const token = await getValidAccessToken();
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) return (await res.json()) as T;
+
+    const retryable = res.status === 429 || res.status === 503;
+    if (retryable && attempt < MAX_RETRIES) {
+      const wait = parseRetryAfter(res.headers.get("Retry-After"), attempt);
+      console.log(
+        `[gmail] ${res.status} on ${path.slice(0, 80)} — retry ${attempt + 1}/${MAX_RETRIES} in ${wait}ms`
+      );
+      await sleep(wait);
+      continue;
+    }
+
     const body = await res.text();
     throw new Error(`Gmail ${res.status}: ${body.slice(0, 200)}`);
   }
-  return res.json() as Promise<T>;
 }
 
 export async function listMessageIds(

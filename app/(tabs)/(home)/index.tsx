@@ -1,22 +1,33 @@
 import { router, Stack } from "expo-router";
 import { useMemo } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { BillsDueSection } from "@/components/bills/bills-due-section";
-import { TransactionCard } from "@/components/feed/transaction-card";
-import { CategoryDonutChart, type DonutSlice } from "@/components/insights/category-donut-chart";
-import { MerchantLogo } from "@/components/ui/merchant-logo";
-import { SectionHeader } from "@/components/ui/section-header";
-import { merchants } from "@/data/merchants";
-import type { Category } from "@/data/types";
 import {
-  selectActiveBills,
-  selectTransactions,
-  useTransactions,
-} from "@/hooks/use-transactions";
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { CardTile } from "@/components/cards/card-tile";
+import { TransactionCard } from "@/components/feed/transaction-card";
+import { SF } from "@/components/ui/sf";
+import { SectionHeader } from "@/components/ui/section-header";
+import { deriveCards } from "@/data/cards";
+import { useNotifications } from "@/hooks/use-notifications";
+import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
 import { useTabScreenBottomPadding, useTabScreenTopPadding } from "@/lib/tab-safe-area";
+import { haptics } from "@/services/haptics";
 import { useAuthStore } from "@/stores/auth-store";
-import { categoryColors, spacing, typography, useTheme } from "@/theme";
-import { formatCurrency, formatTime } from "@/utils/format";
+import { spacing, typography, useIsDark, useTheme } from "@/theme";
+import { cycleOf, sameCycle } from "@/utils/cycle";
+import { formatCurrency } from "@/utils/format";
+
+const CARD_SHADOW_LIGHT = "0px 10px 30px rgba(0,0,0,0.06)";
+const CARD_SHADOW_DARK = "0px 14px 34px rgba(0,0,0,0.5)";
+
+// Carousel card width ≈ 80% of screen so the next card peeks; height follows aspectRatio 1.6.
+const CARD_WIDTH = Math.round(Dimensions.get("window").width * 0.8);
 
 function timeOfDayGreeting() {
   const h = new Date().getHours();
@@ -36,6 +47,8 @@ function nameFromEmail(email: string | null): string {
 
 export default function HomeIndex() {
   const t = useTheme();
+  const isDark = useIsDark();
+  const cardShadow = isDark ? CARD_SHADOW_DARK : CARD_SHADOW_LIGHT;
   const topPad = useTabScreenTopPadding();
   const bottomPad = useTabScreenBottomPadding();
   const gmailEmail = useAuthStore((s) => s.gmailEmail);
@@ -43,17 +56,11 @@ export default function HomeIndex() {
   const greeting = timeOfDayGreeting();
   const { data, isLoading, isError, refetch } = useTransactions();
   const transactions = useMemo(() => selectTransactions(data), [data]);
-  const bills = useMemo(() => selectActiveBills(data), [data]);
+  const { unreadCount } = useNotifications();
 
-  const { total, received, slices, topMerchants, recent, monthCount } = useMemo(() => {
-    const now = new Date();
-    const curYear = now.getFullYear();
-    const curMonth = now.getMonth();
-    const inThisMonth = (iso: string) => {
-      const d = new Date(iso);
-      return d.getFullYear() === curYear && d.getMonth() === curMonth;
-    };
-
+  const { total, received, cards, spendByCard, recent, monthCount } = useMemo(() => {
+    const current = cycleOf(new Date());
+    const inThisMonth = (iso: string) => sameCycle(cycleOf(iso), current);
     const monthTx = transactions.filter((tr) => inThisMonth(tr.date));
     const purchases = monthTx.filter(
       (tr) => tr.direction === "debit" && tr.kind === "purchase"
@@ -61,31 +68,20 @@ export default function HomeIndex() {
     const credits = monthTx.filter((tr) => tr.direction === "credit");
     const total = purchases.reduce((acc, tr) => acc + tr.amount, 0);
     const received = credits.reduce((acc, tr) => acc + tr.amount, 0);
-    const byCategory = new Map<Category, number>();
+
+    const allCards = deriveCards(transactions);
+    const spendByCard = new Map<string, number>();
     purchases.forEach((tr) => {
-      byCategory.set(tr.category, (byCategory.get(tr.category) ?? 0) + tr.amount);
+      const card = allCards.find((c) => c.paymentSource === tr.paymentSource);
+      if (card) spendByCard.set(card.id, (spendByCard.get(card.id) ?? 0) + tr.amount);
     });
-    const slices: DonutSlice[] = Array.from(byCategory.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({
-        label,
-        value,
-        color: categoryColors[label] ?? "#999",
-      }));
-    const merchantMap = new Map<string, number>();
-    purchases.forEach((tr) => {
-      merchantMap.set(tr.merchantId, (merchantMap.get(tr.merchantId) ?? 0) + tr.amount);
-    });
-    const topMerchants = Array.from(merchantMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-    const recent = transactions.slice(0, 5);
+
     return {
       total,
       received,
-      slices,
-      topMerchants,
-      recent,
+      cards: allCards,
+      spendByCard,
+      recent: transactions.slice(0, 5),
       monthCount: monthTx.length,
     };
   }, [transactions]);
@@ -105,10 +101,7 @@ export default function HomeIndex() {
       <View style={styles.center}>
         <Stack.Screen options={{ title: "Luma" }} />
         <Text style={[styles.centerText, { color: t.text }]}>Sync failed</Text>
-        <Text
-          style={[styles.centerText, { color: t.muted }]}
-          onPress={() => refetch()}
-        >
+        <Text style={[styles.centerText, { color: t.muted }]} onPress={() => refetch()}>
           Tap to retry
         </Text>
       </View>
@@ -119,13 +112,8 @@ export default function HomeIndex() {
     return (
       <View style={styles.center}>
         <Stack.Screen options={{ title: "Luma" }} />
-        <Text style={[styles.centerText, { color: t.text }]}>
-          No receipts found yet
-        </Text>
-        <Text
-          style={[styles.centerText, { color: t.muted }]}
-          onPress={() => refetch()}
-        >
+        <Text style={[styles.centerText, { color: t.text }]}>No receipts found yet</Text>
+        <Text style={[styles.centerText, { color: t.muted }]} onPress={() => refetch()}>
           Tap to sync again
         </Text>
       </View>
@@ -141,132 +129,112 @@ export default function HomeIndex() {
     >
       <Stack.Screen options={{ title: "Luma" }} />
 
+      {/* Greeting */}
       <View style={styles.greetingWrap}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.greetingLabel, { color: t.muted }]}>{greeting},</Text>
-          <Text style={[styles.greetingName, { color: t.text }]}>{name}</Text>
-        </View>
-        <View style={[styles.avatar, { backgroundColor: t.tileFill, borderColor: t.tileBorder }]}>
-          <Text style={[styles.avatarText, { color: t.text }]}>
-            {name.charAt(0).toUpperCase()}
+          <Text style={[styles.greetingName, { color: t.text }]}>
+            {greeting}, {name}
+          </Text>
+          <Text style={[styles.greetingSubtitle, { color: t.muted }]}>
+            {monthCount} receipts synced from Gmail
           </Text>
         </View>
-      </View>
-
-      <View style={styles.heroWrap}>
-        <View
-          style={[
-            styles.heroCard,
-            { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-          ]}
+        <Pressable
+          style={[styles.bellBtn, { backgroundColor: t.card, boxShadow: cardShadow }]}
+          onPress={() => {
+            haptics.tap();
+            router.push("/(tabs)/(home)/notifications");
+          }}
         >
-          <Text style={[styles.heroLabel, { color: t.muted }]}>Spent this month</Text>
-          <Text style={[styles.heroAmount, { color: t.text }]}>{formatCurrency(total)}</Text>
-          {received > 0 ? (
-            <Text style={[styles.heroReceived, { color: t.green }]}>
-              +{formatCurrency(received)} received
-            </Text>
+          <SF name="bell" size={20} tint={t.text} />
+          {unreadCount > 0 ? (
+            <View style={[styles.bellDot, { backgroundColor: t.lime, borderColor: t.card }]} />
           ) : null}
-          <View style={styles.heroFooter}>
-            <Text style={[styles.heroMeta, { color: t.muted }]}>
-              {monthCount} transactions
-            </Text>
+        </Pressable>
+      </View>
+
+      {/* Hero spend card */}
+      <View style={styles.heroWrap}>
+        <View style={[styles.heroCard, { backgroundColor: t.card, boxShadow: cardShadow }]}>
+          <View style={styles.heroLabelRow}>
+            <Text style={[styles.heroLabel, { color: t.muted }]}>Spent this month</Text>
           </View>
+          <View style={styles.heroAmountRow}>
+            <Text style={[styles.heroAmount, { color: t.text }]}>{formatCurrency(total)}</Text>
+            <Text style={[styles.heroAmountDecimal, { color: t.muted2 }]}>.00</Text>
+          </View>
+          {received > 0 ? (
+            <View style={styles.heroReceivedRow}>
+              <View style={[styles.receivedPill, { backgroundColor: t.limeSoft }]}>
+                <View style={[styles.receivedDot, { backgroundColor: t.limeMid }]} />
+                <Text style={[styles.receivedText, { color: t.limeSoftInk }]}>
+                  +{formatCurrency(received)} received
+                </Text>
+              </View>
+              <Text style={[styles.heroMeta, { color: t.muted }]}>this month</Text>
+            </View>
+          ) : null}
+          <Pressable
+            style={[styles.seeAllBtn, { backgroundColor: t.text }]}
+            onPress={() => router.push("/(tabs)/(timeline)")}
+          >
+            <Text style={[styles.seeAllText, { color: t.background }]}>
+              See all transactions
+            </Text>
+            <SF name="arrow.right" size={16} tint={isDark ? t.limeMid : t.lime} />
+          </Pressable>
         </View>
       </View>
 
-      {bills.length > 0 ? (
-        <View style={styles.billsBlock}>
-          <BillsDueSection bills={bills} />
-        </View>
-      ) : null}
-
-      {slices.length > 0 ? (
+      {/* Cards horizontal scroll */}
+      {cards.length > 0 ? (
         <>
-          <SectionHeader title="By category" />
-          <View style={styles.donutWrap}>
-            <CategoryDonutChart data={slices} total={total} size={240} thickness={26} />
-          </View>
-          <View style={styles.legendWrap}>
-            <View
-              style={[
-                styles.legendCard,
-                { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-              ]}
-            >
-              {slices.map((s, idx) => {
-                const pct = total > 0 ? (s.value / total) * 100 : 0;
-                return (
-                  <View key={s.label}>
-                    <View style={styles.legendRow}>
-                      <View style={[styles.legendDot, { backgroundColor: s.color }]} />
-                      <Text style={[styles.legendLabel, { color: t.text }]}>{s.label}</Text>
-                      <Text style={[styles.legendPct, { color: t.muted }]}>
-                        {pct < 1 ? "<1%" : `${Math.round(pct)}%`}
-                      </Text>
-                      <Text style={[styles.legendValue, { color: t.text }]}>
-                        {formatCurrency(s.value)}
-                      </Text>
-                    </View>
-                    {idx < slices.length - 1 ? (
-                      <View
-                        style={[styles.legendSeparator, { backgroundColor: t.tileBorder }]}
-                      />
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
+          <SectionHeader
+            title="Your cards"
+            actionLabel="+ New"
+            onAction={() => router.push("/(tabs)/(cards)")}
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.cardsRow}
+          >
+            {cards.map((card) => (
+              <Pressable
+                key={card.id}
+                style={styles.cardItem}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/(cards)/[id]",
+                    params: { id: card.id },
+                  })
+                }
+              >
+                <CardTile card={card} thisMonthSpend={spendByCard.get(card.id) ?? 0} />
+              </Pressable>
+            ))}
+          </ScrollView>
         </>
       ) : null}
 
-      <SectionHeader
-        title="Top merchants"
-        actionLabel="See all"
-        onAction={() => router.push("/(tabs)/(home)/merchants")}
-      />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.merchantsRow}
-      >
-        {topMerchants.map(([id, amount]) => {
-          const m = merchants[id];
-          return (
-            <View
-              key={id}
-              style={[
-                styles.merchantTile,
-                { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-              ]}
-            >
-              <MerchantLogo merchantId={id} size={56} />
-              <Text style={[styles.merchantName, { color: t.text }]} numberOfLines={1}>
-                {m?.name ?? id}
-              </Text>
-              <Text style={[styles.merchantAmount, { color: t.muted }]}>
-                {formatCurrency(amount)}
-              </Text>
+      {/* Recent transactions — unified card with dividers */}
+      <View style={styles.recentWrap}>
+        <View style={[styles.recentCard, { backgroundColor: t.card, boxShadow: cardShadow }]}>
+          <View style={styles.recentHeader}>
+            <Text style={[styles.recentTitle, { color: t.text }]}>Transactions</Text>
+            <Pressable hitSlop={12} onPress={() => router.push("/(tabs)/(timeline)")}>
+              <Text style={[styles.recentSeeAll, { color: t.limeMid }]}>See all</Text>
+            </Pressable>
+          </View>
+          {recent.map((tr, idx) => (
+            <View key={tr.id}>
+              <TransactionCard transaction={tr} embedded />
+              {idx < recent.length - 1 ? (
+                <View style={[styles.recentDivider, { backgroundColor: t.divider }]} />
+              ) : null}
             </View>
-          );
-        })}
-      </ScrollView>
-
-      <SectionHeader
-        title="Recent"
-        actionLabel="See all"
-        onAction={() => router.push("/(tabs)/(timeline)")}
-      />
-      <View style={styles.recent}>
-        {recent.map((tr) => (
-          <TransactionCard key={tr.id} transaction={tr} />
-        ))}
-        {recent[0] ? (
-          <Text style={[styles.timeHint, { color: t.muted }]}>
-            Last activity {formatTime(recent[0].date)}
-          </Text>
-        ) : null}
+          ))}
+        </View>
       </View>
     </ScrollView>
   );
@@ -281,102 +249,121 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     gap: 14,
   },
-  greetingLabel: {
-    ...typography.caption,
-    fontSize: 14,
-    fontWeight: "500",
-  },
   greetingName: {
-    fontSize: 28,
-    fontWeight: "700",
-    letterSpacing: -0.4,
-    marginTop: 2,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  greetingSubtitle: {
+    ...typography.caption,
+    marginTop: 3,
+  },
+  bellBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
     borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
+    position: "relative",
   },
-  avatarText: {
-    fontSize: 17,
-    fontWeight: "700",
-    letterSpacing: -0.2,
+  bellDot: {
+    position: "absolute",
+    top: 10,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 2,
   },
   heroWrap: { paddingHorizontal: spacing.hPad },
   heroCard: {
     padding: 22,
-    borderRadius: 22,
+    borderRadius: 28,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: 0,
   },
-  heroLabel: { ...typography.caption, textTransform: "uppercase" },
-  heroAmount: {
-    ...typography.h1,
-    marginTop: 6,
-    fontVariant: ["tabular-nums"],
-  },
-  heroReceived: { ...typography.caption, fontSize: 13, fontWeight: "600", marginTop: 4 },
-  heroFooter: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
-  heroMeta: { ...typography.caption },
-  billsBlock: { marginTop: 16 },
-  donutWrap: { alignItems: "center", paddingVertical: 12 },
-  legendWrap: { paddingHorizontal: spacing.hPad, marginTop: 8 },
-  legendCard: {
-    borderRadius: 18,
-    borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  legendRow: {
+  heroLabelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    justifyContent: "space-between",
   },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendLabel: {
-    ...typography.body,
-    fontSize: 15,
-    fontWeight: "500",
-    flex: 1,
+  heroLabel: { ...typography.caption, fontSize: 14, fontWeight: "600" },
+  heroAmountRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+    marginTop: 8,
   },
-  legendPct: {
-    ...typography.micro,
-    fontSize: 12,
-    fontWeight: "500",
+  heroAmount: {
+    fontSize: 40,
+    fontWeight: "800",
+    letterSpacing: -1.5,
     fontVariant: ["tabular-nums"],
-    minWidth: 36,
-    textAlign: "right",
   },
-  legendValue: {
-    ...typography.body,
-    fontSize: 15,
-    fontWeight: "600",
-    fontVariant: ["tabular-nums"],
-    minWidth: 84,
-    textAlign: "right",
+  heroAmountDecimal: {
+    fontSize: 20,
+    fontWeight: "700",
   },
-  legendSeparator: { height: StyleSheet.hairlineWidth, marginLeft: 38 },
-  merchantsRow: { paddingHorizontal: spacing.hPad, gap: 12 },
-  merchantTile: {
-    width: 96,
+  heroReceivedRow: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: 20,
-    borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+    marginTop: 12,
   },
-  merchantName: { ...typography.caption, fontWeight: "500", marginTop: 4 },
-  merchantAmount: { ...typography.micro },
-  recent: { paddingHorizontal: spacing.hPad, gap: 10, marginTop: 4 },
-  timeHint: { ...typography.micro, textAlign: "center", marginTop: 12 },
+  receivedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderCurve: "continuous",
+  },
+  receivedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  receivedText: { fontSize: 12.5, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  heroMeta: { ...typography.caption, fontWeight: "600" },
+  seeAllBtn: {
+    marginTop: 18,
+    height: 52,
+    borderRadius: 18,
+    borderCurve: "continuous",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  seeAllText: { fontSize: 15.5, fontWeight: "700" },
+  cardsRow: {
+    paddingHorizontal: spacing.hPad,
+    gap: 14,
+    paddingBottom: 4,
+    paddingTop: 2,
+  },
+  cardItem: { width: CARD_WIDTH },
+  recentWrap: { paddingHorizontal: spacing.hPad, marginTop: 26 },
+  recentCard: {
+    borderRadius: 28,
+    borderCurve: "continuous",
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  recentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 16,
+    paddingBottom: 4,
+    paddingHorizontal: 2,
+  },
+  recentTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
+  recentSeeAll: { fontSize: 13.5, fontWeight: "700" },
+  recentDivider: { height: StyleSheet.hairlineWidth },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   centerText: { ...typography.body, textAlign: "center" },
 });

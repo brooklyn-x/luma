@@ -7,11 +7,21 @@ type Props = {
   tint: string;
   plateSize?: number;
   symbolSize?: number;
+  cornerRadius?: number;
 };
 
-export function HeroIcon({ symbol, tint, plateSize = 96, symbolSize = 40 }: Props) {
+export function HeroIcon({
+  symbol,
+  tint,
+  plateSize = 96,
+  symbolSize = 40,
+  cornerRadius,
+}: Props) {
   return (
-    <Glass cornerRadius={plateSize / 2} style={{ width: plateSize, height: plateSize }}>
+    <Glass
+      cornerRadius={cornerRadius ?? plateSize / 2}
+      style={{ width: plateSize, height: plateSize }}
+    >
       <View style={styles.center}>
         <SF name={symbol} size={symbolSize} tint={tint} />
       </View>

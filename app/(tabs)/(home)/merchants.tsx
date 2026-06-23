@@ -64,10 +64,9 @@ export default function MerchantsList() {
           headerShown: true,
           headerTransparent: true,
           headerTitle: "",
-          headerBackTitle: "Home",
           headerTintColor: PlatformColor("label") as unknown as string,
           headerShadowVisible: false,
-          headerBackButtonDisplayMode: "default",
+          headerBackButtonDisplayMode: "minimal",
         }}
       />
       <ScrollView

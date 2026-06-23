@@ -3,20 +3,15 @@
     "name": "Luma",
     "slug": "luma",
     "scheme": "luma",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.brook-luma.ios",
-      "buildNumber": "11",
+      "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -54,7 +49,10 @@
               "scheme": "com.googleusercontent.apps.81386467172-0vquu07ke8jduudaqh4r1du0cqhl12ed"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -73,7 +71,21 @@
             "deploymentTarget": "26.0"
           }
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

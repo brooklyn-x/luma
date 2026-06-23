@@ -51,6 +51,11 @@ export function CardTile({ card, thisMonthSpend }: Props) {
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
+          <View style={styles.watermarkContainer} pointerEvents="none">
+            <Text style={[styles.watermark, { color: card.contrast === "dark" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.09)" }]}>
+              {"luma ".repeat(40)}
+            </Text>
+          </View>
           <LinearGradient
             colors={sheen as unknown as readonly [string, string]}
             start={{ x: 0, y: 0 }}
@@ -90,6 +95,21 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
     overflow: "hidden",
     backgroundColor: "#000",
+  },
+  watermarkContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: "hidden",
+    transform: [{ rotate: "-8deg" }, { scale: 1.3 }],
+  },
+  watermark: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 1,
+    lineHeight: 28,
   },
   sheen: {
     position: "absolute",

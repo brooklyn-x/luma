@@ -1,8 +1,9 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { TransactionCard } from "@/components/feed/transaction-card";
+import { Drawer } from "@/components/ui/drawer";
 import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { merchants } from "@/data/merchants";
 import { selectTransactions, useTransactions } from "@/hooks/use-transactions";
@@ -31,7 +32,7 @@ export default function MerchantDetail() {
   const accent = merchant?.color ?? (id ? deterministicColor(id) : t.elevated);
 
   return (
-    <View style={[styles.root, { backgroundColor: t.background }]}>
+    <Drawer onClose={() => router.back()}>
       <View style={styles.merchantBlob} pointerEvents="none">
         <LinearGradient
           colors={[`${accent}66`, "rgba(11,11,13,0)"]}
@@ -41,7 +42,6 @@ export default function MerchantDetail() {
         />
       </View>
       <ScrollView
-        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -73,7 +73,7 @@ export default function MerchantDetail() {
         </View>
       )}
       </ScrollView>
-    </View>
+    </Drawer>
   );
 }
 

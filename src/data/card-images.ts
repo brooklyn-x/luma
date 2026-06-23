@@ -10,23 +10,8 @@ import type { ImageSourcePropType } from "react-native";
 //   2. Uncomment / add the matching line below.
 //
 // Cards without an entry here keep using the gradient tile fallback.
-export const cardImages: Record<string, ImageSourcePropType> = {
-  HDFC: require("@/assets/cards/hdfc.png"),
-  ICICI: require("@/assets/cards/icici.png"),
-  // Amex: require("@/assets/cards/amex.png"),
-  SBI: require("@/assets/cards/sbi.png"),
-  // Axis: require("@/assets/cards/axis.png"),
-  // Kotak: require("@/assets/cards/kotak.png"),
-  Yes: require("@/assets/cards/yes.png"),
-  // Federal: require("@/assets/cards/federal.png"),
-  // Kiwi: require("@/assets/cards/kiwi.png"),
-  "SBI Card": require("@/assets/cards/sbi.png"),
-  // AU: require("@/assets/cards/au.png"),
-  // "IDFC First": require("@/assets/cards/idfc-first.png"),
-  // IndusInd: require("@/assets/cards/indusind.png"),
-  // "GPay UPI": require("@/assets/cards/gpay.png"),
-  // PhonePe: require("@/assets/cards/phonepe.png"),
-  // Paytm: require("@/assets/cards/paytm.png"),
-  // Razorpay: require("@/assets/cards/razorpay.png"),
-  // Stripe: require("@/assets/cards/stripe.png"),
-};
+//
+// Registry intentionally left empty — every card renders the generated
+// gradient tile, which matches the redesign. To re-enable a real card image,
+// drop the PNG into `src/assets/cards/` and add a `Issuer: require(...)` line.
+export const cardImages: Record<string, ImageSourcePropType> = {};

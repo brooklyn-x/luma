@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsRestoring,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { Bill, Transaction } from "@/data/types";
 import {
   syncTransactions,
@@ -16,6 +21,7 @@ export function useTransactions() {
   const qc = useQueryClient();
   const connected = useAuthStore((s) => s.connected);
   const provider = useAuthStore((s) => s.provider);
+  const isRestoring = useIsRestoring();
   return useQuery<SyncResult>({
     queryKey: TRANSACTIONS_KEY,
     queryFn: () => {
@@ -23,15 +29,17 @@ export function useTransactions() {
       const existing = qc.getQueryData<SyncResult>(TRANSACTIONS_KEY);
       return syncTransactions(provider, undefined, { existing });
     },
-    enabled: connected && !!provider,
+    // Wait for persisted cache to hydrate before firing — otherwise `existing`
+    // is undefined and the sync falls back to a full 90-day scan.
+    enabled: connected && !!provider && !isRestoring,
     staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 }
 
 export function useSyncMutation(
   onProgress?: (p: SyncProgress) => void,
-  options?: { force?: boolean }
+  options?: { force?: boolean; daysBack?: number }
 ) {
   const qc = useQueryClient();
   const provider = useAuthStore((s) => s.provider);
@@ -41,7 +49,8 @@ export function useSyncMutation(
       const existing = options?.force
         ? undefined
         : qc.getQueryData<SyncResult>(TRANSACTIONS_KEY);
-      return syncTransactions(provider, onProgress, { existing });
+      const daysBack = options?.daysBack ?? (options?.force ? 180 : undefined);
+      return syncTransactions(provider, onProgress, { existing, daysBack });
     },
     onSuccess: (data) => {
       qc.setQueryData(TRANSACTIONS_KEY, data);

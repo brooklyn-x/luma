@@ -31,9 +31,9 @@ const ISSUER_STYLES: Record<string, IssuerStyle> = {
     issuer: "HDFC",
     productName: "Bank",
     kind: "credit",
-    gradientFrom: "#0F2C6E",
-    gradientTo: "#1F4FBF",
-    contrast: "light",
+    gradientFrom: "#C6F24E",
+    gradientTo: "#A8E22E",
+    contrast: "dark",
   },
   ICICI: {
     issuer: "ICICI",

@@ -1,27 +1,31 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { merchants } from "@/data/merchants";
+import { MerchantLogo } from "@/components/ui/merchant-logo";
 import { useSyncMutation, type SyncLogEntry } from "@/hooks/use-transactions";
 import { haptics } from "@/services/haptics";
-import { SF } from "@/components/ui/sf";
-import { colors, spacing, typography, useTheme } from "@/theme";
+import {
+  categoryColors,
+  spacing,
+  typography,
+  useCardShadow,
+  useTheme,
+  type Palette,
+} from "@/theme";
 import { formatCurrency } from "@/utils/format";
 
 type Stage = "list" | "fetch" | "parse" | "done";
 
-const stageMeta: Record<Stage, { label: string; symbol: string }> = {
-  list: { label: "Searching your inbox", symbol: "magnifyingglass" },
-  fetch: { label: "Reading receipts", symbol: "envelope.fill" },
-  parse: { label: "Extracting transactions", symbol: "tray.full" },
-  done: { label: "Done", symbol: "checkmark" },
-};
-
 const MAX_LIVE_LOG = 40;
+
+const groupSep = new Intl.NumberFormat("en-IN");
 
 export default function Syncing() {
   const t = useTheme();
+  const cardShadow = useCardShadow();
+  const check = t.limeMid;
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ full?: string }>();
   const force = params.full === "1";
@@ -31,6 +35,8 @@ export default function Syncing() {
   const [parsed, setParsed] = useState(0);
   const [log, setLog] = useState<SyncLogEntry[]>([]);
   const startedRef = useRef(false);
+  const parsedRef = useRef(0);
+  const totalRef = useRef(0);
 
   const mutation = useSyncMutation(
     (p) => {
@@ -38,6 +44,8 @@ export default function Syncing() {
       setTotal(p.total);
       setProcessed(p.processed);
       setParsed(p.parsed);
+      parsedRef.current = p.parsed;
+      totalRef.current = p.total;
       if (p.lastEntry) {
         setLog((prev) => {
           const next = [p.lastEntry as SyncLogEntry, ...prev];
@@ -54,7 +62,13 @@ export default function Syncing() {
     mutation.mutate(undefined, {
       onSuccess: () => {
         haptics.success();
-        router.replace("/(tabs)/(home)");
+        router.replace({
+          pathname: "/all-set",
+          params: {
+            parsed: String(parsedRef.current),
+            total: String(totalRef.current),
+          },
+        });
       },
       onError: (err) => {
         Alert.alert(
@@ -74,97 +88,55 @@ export default function Syncing() {
         : total
           ? Math.min(0.95, 0.1 + (processed / total) * 0.85)
           : 0.1;
+  const pct = Math.round(progress * 100);
+
+  const subtitle =
+    stage === "list"
+      ? "Looking for transaction emails…"
+      : `${groupSep.format(total)} emails · ${parsed} receipts found`;
+
+  // Only the parsed receipts (merchant + amount + category) become cards.
+  const sorted = log.filter((e) => e.status === "parsed" || e.status === "bill");
 
   return (
     <View
       style={[
         styles.root,
-        { backgroundColor: t.background, paddingTop: insets.top + 32 },
+        { backgroundColor: t.background, paddingTop: insets.top + 40 },
       ]}
     >
-      <View style={styles.heroWrap}>
-        <View
-          style={[
-            styles.iconPlate,
-            { backgroundColor: t.tileFill, borderColor: t.tileBorder },
-          ]}
-        >
-          <SF name="envelope.fill" size={28} tint={colors.blue} />
-        </View>
+      <View style={styles.hero}>
         <Text style={[styles.percent, { color: t.text }]}>
-          {Math.round(progress * 100)}%
+          {pct}
+          <Text style={[styles.percentSign, { color: t.muted2 }]}>%</Text>
         </Text>
-        <View style={[styles.progressTrack, { backgroundColor: t.tileBorder }]}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${Math.round(progress * 100)}%`,
-                backgroundColor: colors.blue,
-              },
-            ]}
-          />
-        </View>
+        <Text style={[styles.title, { color: t.text }]}>Reading your inbox</Text>
+        <Text style={[styles.subtitle, { color: t.muted }]}>{subtitle}</Text>
       </View>
 
-      <Text style={[styles.title, { color: t.text }]}>Reading your inbox</Text>
-      <Text style={[styles.subtitle, { color: t.muted }]}>
-        {stage === "list"
-          ? "Looking for transaction emails…"
-          : stage === "done"
-            ? `Found ${parsed} transactions in ${total} receipts.`
-            : `Processed ${processed} of ${total} · ${parsed} found`}
-      </Text>
-
-      <View style={styles.steps}>
-        {(["list", "fetch", "parse"] as Stage[]).map((s) => {
-          const order: Record<Stage, number> = { list: 0, fetch: 1, parse: 2, done: 3 };
-          const status: "done" | "active" | "pending" =
-            order[stage] > order[s] || stage === "done"
-              ? "done"
-              : stage === s
-                ? "active"
-                : "pending";
-          const tint =
-            status === "done" ? t.green : status === "active" ? colors.blue : t.muted;
-          const sym = status === "done" ? "checkmark" : stageMeta[s].symbol;
-          return (
-            <View key={s} style={styles.row}>
-              <View style={[styles.iconCircle, { backgroundColor: `${tint}22` }]}>
-                <SF name={sym} size={14} tint={tint} />
-              </View>
-              <Text
-                style={[
-                  styles.label,
-                  { color: status === "active" ? t.text : t.muted },
-                ]}
-              >
-                {stageMeta[s].label}
-              </Text>
-            </View>
-          );
-        })}
+      <View style={[styles.progressTrack, { backgroundColor: t.tileBorder }]}>
+        <LinearGradient
+          colors={[t.limeStrong, t.lime]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.progressFill, { width: `${pct}%` }]}
+        />
       </View>
 
-      <View style={styles.logHeader}>
-        <Text style={[styles.logTitle, { color: t.muted }]}>Live</Text>
-        <Text style={[styles.logCount, { color: t.muted }]}>
-          {parsed} parsed · {processed - parsed} skipped
-        </Text>
-      </View>
+      <Text style={[styles.sortingLabel, { color: t.muted2 }]}>Sorting now</Text>
 
       <ScrollView
-        style={styles.logScroll}
-        contentContainerStyle={styles.logContent}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
-        {log.length === 0 ? (
-          <Text style={[styles.logEmpty, { color: t.muted }]}>
+        {sorted.length === 0 ? (
+          <Text style={[styles.empty, { color: t.muted }]}>
             Waiting for the first email…
           </Text>
         ) : (
-          log.map((entry) => (
-            <LogRow key={entry.id} entry={entry} />
+          sorted.map((entry) => (
+            <SortCard key={entry.id} entry={entry} t={t} shadow={cardShadow} check={check} />
           ))
         )}
       </ScrollView>
@@ -172,80 +144,65 @@ export default function Syncing() {
   );
 }
 
-function LogRow({ entry }: { entry: SyncLogEntry }) {
-  const t = useTheme();
-  const isParsed = entry.status === "parsed";
-  const isError = entry.status === "error";
-
-  const tint = isParsed ? colors.green : isError ? colors.red : t.muted;
-  const sym = isParsed ? "checkmark.circle.fill" : isError ? "xmark.octagon.fill" : "minus.circle";
-
-  const merchantName = entry.merchantId ? merchants[entry.merchantId]?.name : undefined;
-  const primary = isParsed
-    ? `${merchantName ?? entry.merchantName ?? entry.merchantId} · ${entry.amount ? formatCurrency(entry.amount) : ""}`
-    : entry.from || entry.subject || entry.id;
-  const secondary = isParsed
-    ? entry.subject
-    : entry.reason ?? entry.subject;
-
+function SortCard({
+  entry,
+  t,
+  shadow,
+  check,
+}: {
+  entry: SyncLogEntry;
+  t: Palette;
+  shadow: string;
+  check: string;
+}) {
+  const name = entry.merchantName ?? entry.merchantId ?? "Receipt";
+  const catColor = entry.category ? categoryColors[entry.category] : undefined;
   return (
-    <View style={styles.logRow}>
-      <SF name={sym} size={14} tint={tint} />
-      <View style={styles.logRowText}>
-        <Text
-          style={[
-            styles.logPrimary,
-            { color: isParsed ? t.text : t.muted, opacity: isParsed ? 1 : 0.7 },
-          ]}
-          numberOfLines={1}
-        >
-          {primary}
+    <View style={[styles.card, { backgroundColor: t.card, boxShadow: shadow }]}>
+      <MerchantLogo merchantId={entry.merchantId ?? name} size={42} name={name} />
+      <View style={styles.cardMiddle}>
+        <Text style={[styles.cardName, { color: t.text }]} numberOfLines={1}>
+          {name}
         </Text>
-        {secondary ? (
-          <Text style={[styles.logSecondary, { color: t.muted }]} numberOfLines={1}>
-            {secondary}
+        {entry.amount ? (
+          <Text style={[styles.cardAmount, { color: t.muted }]}>
+            {formatCurrency(entry.amount)}
           </Text>
         ) : null}
       </View>
+      {entry.category && catColor ? (
+        <View style={[styles.pill, { backgroundColor: `${catColor}22` }]}>
+          <Text style={[styles.pillText, { color: catColor }]} numberOfLines={1}>
+            {entry.category}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: spacing.hPad },
-  heroWrap: { alignItems: "center", marginTop: 12, marginBottom: 16, gap: 14 },
-  iconPlate: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  hero: { alignItems: "center", marginBottom: 22 },
   percent: {
-    ...typography.h2,
-    fontSize: 22,
-    fontWeight: "700",
+    ...typography.h1,
+    fontSize: 72,
+    lineHeight: 80,
+    fontWeight: "800",
     fontVariant: ["tabular-nums"],
-    letterSpacing: -0.4,
+    letterSpacing: -3,
   },
-  progressTrack: {
-    width: "100%",
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
+  percentSign: {
+    fontSize: 34,
+    fontWeight: "700",
+    letterSpacing: -1,
   },
   title: {
-    ...typography.h2,
     fontSize: 24,
-    fontWeight: "700",
+    fontWeight: "800",
     textAlign: "center",
     letterSpacing: -0.4,
+    marginTop: 4,
   },
   subtitle: {
     ...typography.body,
@@ -254,40 +211,52 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
   },
-  steps: { marginTop: 18, gap: 8 },
-  row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  iconCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
+  progressTrack: {
+    width: "100%",
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
   },
-  label: { ...typography.body, fontSize: 14 },
-  logHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 20,
-    marginBottom: 6,
-    paddingHorizontal: 2,
+  progressFill: {
+    height: "100%",
+    borderRadius: 4,
   },
-  logTitle: {
+  sortingLabel: {
     ...typography.micro,
     textTransform: "uppercase",
     fontWeight: "700",
-    letterSpacing: 0.6,
+    letterSpacing: 1,
+    marginTop: 24,
+    marginBottom: 12,
+    paddingHorizontal: 2,
   },
-  logCount: { ...typography.micro },
-  logScroll: { flex: 1 },
-  logContent: { paddingBottom: 32, gap: 10 },
-  logEmpty: {
+  list: { flex: 1 },
+  listContent: { paddingBottom: 32, gap: 12 },
+  empty: {
     ...typography.caption,
     textAlign: "center",
     paddingVertical: 24,
   },
-  logRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logRowText: { flex: 1, gap: 1 },
-  logPrimary: { ...typography.caption, fontWeight: "500" },
-  logSecondary: { ...typography.micro },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+    borderRadius: 20,
+    borderCurve: "continuous",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  cardMiddle: { flex: 1, gap: 1 },
+  cardName: { ...typography.body, fontSize: 15, fontWeight: "700" },
+  cardAmount: {
+    ...typography.caption,
+    fontVariant: ["tabular-nums"],
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderCurve: "continuous",
+  },
+  pillText: { fontSize: 12.5, fontWeight: "700" },
 });

@@ -4,17 +4,19 @@ import { typography, useTheme } from "@/theme";
 
 type Props = {
   symbol: string;
-  tint: string;
+  /** Optional icon-color override. Defaults to the lime-soft accent. */
+  tint?: string;
   title: string;
   body: string;
 };
 
 export function FeatureRow({ symbol, tint, title, body }: Props) {
   const t = useTheme();
+  const iconTint = tint ?? t.limeSoftInk;
   return (
     <View style={styles.row}>
-      <View style={[styles.iconCircle, { backgroundColor: `${tint}22` }]}>
-        <SF name={symbol} size={18} tint={tint} />
+      <View style={[styles.iconChip, { backgroundColor: t.limeSoft }]}>
+        <SF name={symbol} size={20} tint={iconTint} />
       </View>
       <View style={styles.text}>
         <Text style={[styles.title, { color: t.text }]}>{title}</Text>
@@ -27,18 +29,19 @@ export function FeatureRow({ symbol, tint, title, body }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 14,
-    paddingVertical: 6,
+    paddingVertical: 9,
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
-  text: { flex: 1, gap: 2, paddingTop: 2 },
+  text: { flex: 1, gap: 2 },
   title: { ...typography.body, fontWeight: "600" },
   body: { ...typography.caption, fontSize: 14, lineHeight: 19 },
 });

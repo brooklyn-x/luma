@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { Bill } from "@/data/types";
 import { SF } from "@/components/ui/sf";
-import { colors, spacing, typography, useTheme } from "@/theme";
+import { colors, spacing, typography, useChipShadow, useTheme } from "@/theme";
+import { dueLabel, statusOf } from "@/utils/bills";
 import { formatCurrency } from "@/utils/format";
 
 type Props = {
@@ -11,26 +12,9 @@ type Props = {
   compact?: boolean;
 };
 
-type Status = "overdue" | "due-soon" | "upcoming";
-
-function statusOf(dueDate: string): { status: Status; days: number } {
-  const days = Math.ceil(
-    (+new Date(dueDate) - Date.now()) / (1000 * 60 * 60 * 24)
-  );
-  const status: Status =
-    days < 0 ? "overdue" : days < 3 ? "due-soon" : "upcoming";
-  return { status, days };
-}
-
-function dueLabel(days: number): string {
-  if (days < 0) return `${Math.abs(days)}d overdue`;
-  if (days === 0) return "Due today";
-  if (days === 1) return "Due tomorrow";
-  return `Due in ${days}d`;
-}
-
 export function BillsDueSection({ bills, title = "Bills due", compact }: Props) {
   const t = useTheme();
+  const chipShadow = useChipShadow();
   if (!bills.length) return null;
 
   return (
@@ -52,7 +36,7 @@ export function BillsDueSection({ bills, title = "Bills due", compact }: Props) 
               key={bill.id}
               style={[
                 styles.row,
-                { backgroundColor: t.tileFill, borderColor: t.tileBorder },
+                { backgroundColor: t.card, boxShadow: chipShadow },
               ]}
             >
               <View style={[styles.dot, { backgroundColor: accent }]} />
@@ -113,7 +97,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 16,
     borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
   middle: { flex: 1, gap: 2 },

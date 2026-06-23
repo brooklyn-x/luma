@@ -5,7 +5,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { haptics } from "@/services/haptics";
-import { colors, useTheme } from "@/theme";
+import { useTheme } from "@/theme";
 
 type Props = {
   label: string;
@@ -36,8 +36,8 @@ export function ContinueButton({
   };
 
   const isSecondary = variant === "secondary";
-  const bg = isSecondary ? t.tileFill : colors.blue;
-  const fg = isSecondary ? t.text : "#FFFFFF";
+  const bg = isSecondary ? t.tileFill : t.text;
+  const fg = isSecondary ? t.text : t.background;
   const border = isSecondary ? t.tileBorder : "transparent";
 
   return (
@@ -65,8 +65,8 @@ export function ContinueButton({
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 17,
+    borderRadius: 18,
     borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",

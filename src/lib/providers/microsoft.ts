@@ -6,6 +6,7 @@ import { parseFromHeader, stripHtml } from "../email-utils";
 import type {
   EmailMessage,
   EmailProvider,
+  GetMessagesResult,
   ListOptions,
 } from "../email-provider";
 
@@ -232,16 +233,76 @@ async function disconnect(): Promise<void> {
   await clearTokens();
 }
 
+const MAX_RETRIES = 4;
+const MAX_RETRY_AFTER_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfter(header: string | null, attempt: number): number {
+  const fallback = Math.min(MAX_RETRY_AFTER_MS, 500 * 2 ** attempt);
+  if (!header) return fallback;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(MAX_RETRY_AFTER_MS, seconds * 1000);
+  }
+  const dateMs = Date.parse(header);
+  if (!Number.isNaN(dateMs)) {
+    return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, dateMs - Date.now()));
+  }
+  return fallback;
+}
+
 async function graphFetch<T>(path: string): Promise<T> {
-  const token = await getValidAccessToken();
-  const res = await fetch(`${GRAPH}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const token = await getValidAccessToken();
+    const res = await fetch(`${GRAPH}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) return (await res.json()) as T;
+
+    const retryable = res.status === 429 || res.status === 503;
+    if (retryable && attempt < MAX_RETRIES) {
+      const wait = parseRetryAfter(res.headers.get("Retry-After"), attempt);
+      console.log(
+        `[ms-graph] ${res.status} on ${path.slice(0, 80)} — retry ${attempt + 1}/${MAX_RETRIES} in ${wait}ms`
+      );
+      await sleep(wait);
+      continue;
+    }
+
     const body = await res.text();
     throw new Error(`Graph ${res.status}: ${body.slice(0, 200)}`);
   }
-  return res.json() as Promise<T>;
+}
+
+async function graphPost<T>(path: string, body: unknown): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const token = await getValidAccessToken();
+    const res = await fetch(`${GRAPH}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return (await res.json()) as T;
+
+    const retryable = res.status === 429 || res.status === 503;
+    if (retryable && attempt < MAX_RETRIES) {
+      const wait = parseRetryAfter(res.headers.get("Retry-After"), attempt);
+      console.log(
+        `[ms-graph] POST ${res.status} on ${path.slice(0, 80)} — retry ${attempt + 1}/${MAX_RETRIES} in ${wait}ms`
+      );
+      await sleep(wait);
+      continue;
+    }
+
+    const text = await res.text();
+    throw new Error(`Graph ${res.status}: ${text.slice(0, 200)}`);
+  }
 }
 
 async function listMessageIds(opts: ListOptions): Promise<string[]> {
@@ -311,17 +372,26 @@ type GraphMessage = {
   body?: { contentType?: "html" | "text"; content?: string };
 };
 
-async function getMessage(id: string): Promise<EmailMessage> {
-  const msg = await graphFetch<GraphMessage>(
-    `/me/messages/${id}?$select=id,subject,from,receivedDateTime,bodyPreview,body`
-  );
+const MESSAGE_SELECT_PREVIEW = "id,subject,from,receivedDateTime,bodyPreview";
+const MESSAGE_SELECT_FULL = `${MESSAGE_SELECT_PREVIEW},body`;
+const BATCH_LIMIT = 20;
+
+function shapeGraphMessage(msg: GraphMessage): EmailMessage {
   const fromAddress = msg.from?.emailAddress?.address ?? "";
   const fromName = msg.from?.emailAddress?.name ?? "";
-  const rawBody = msg.body?.content ?? "";
-  const body =
-    msg.body?.contentType === "text"
-      ? rawBody.replace(/\s+/g, " ").trim()
-      : stripHtml(rawBody);
+  const rawBody = msg.body?.content;
+  const preview = msg.bodyPreview ?? "";
+  let body: string;
+  if (rawBody) {
+    body =
+      msg.body?.contentType === "text"
+        ? rawBody.replace(/\s+/g, " ").trim()
+        : stripHtml(rawBody);
+  } else {
+    // Preview-only fetch: surface the 255-char preview as `body` so parsers
+    // (which read msg.body) can attempt a match against it.
+    body = preview;
+  }
   return {
     id: msg.id,
     from: parseFromHeader(`"${fromName}" <${fromAddress}>`),
@@ -330,8 +400,113 @@ async function getMessage(id: string): Promise<EmailMessage> {
     date: msg.receivedDateTime
       ? new Date(msg.receivedDateTime).toISOString()
       : new Date().toISOString(),
-    snippet: msg.bodyPreview ?? "",
+    snippet: preview,
   };
+}
+
+async function getMessage(id: string): Promise<EmailMessage> {
+  const msg = await graphFetch<GraphMessage>(
+    `/me/messages/${id}?$select=${MESSAGE_SELECT_FULL}`
+  );
+  return shapeGraphMessage(msg);
+}
+
+type BatchSubResponse = {
+  id: string;
+  status: number;
+  headers?: Record<string, string>;
+  body?: GraphMessage | { error?: { code?: string; message?: string } };
+};
+
+type BatchResponse = { responses: BatchSubResponse[] };
+
+function headerValue(
+  headers: Record<string, string> | undefined,
+  name: string
+): string | null {
+  if (!headers) return null;
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === lower) return headers[key];
+  }
+  return null;
+}
+
+async function getMessages(
+  ids: string[],
+  opts?: { withBody?: boolean }
+): Promise<GetMessagesResult[]> {
+  if (ids.length === 0) return [];
+  if (ids.length > BATCH_LIMIT) {
+    throw new Error(`getMessages: max ${BATCH_LIMIT} ids per call`);
+  }
+
+  const withBody = opts?.withBody ?? true;
+  const select = withBody ? MESSAGE_SELECT_FULL : MESSAGE_SELECT_PREVIEW;
+  const passLabel = withBody ? "body" : "preview";
+
+  const results = new Map<string, GetMessagesResult>();
+  let pending = [...ids];
+
+  for (let attempt = 0; attempt <= MAX_RETRIES && pending.length; attempt++) {
+    const requests = pending.map((id) => ({
+      id,
+      method: "GET",
+      url: `/me/messages/${id}?$select=${select}`,
+    }));
+    console.log(
+      `[ms-batch] POST $batch  pass=${passLabel}  ids=${pending.length}  attempt=${attempt + 1}`
+    );
+    const data = await graphPost<BatchResponse>("/$batch", { requests });
+
+    const throttled: string[] = [];
+    let waitMs = 0;
+
+    for (const r of data.responses) {
+      if (r.status === 200 && r.body && "id" in r.body) {
+        results.set(r.id, {
+          ok: true,
+          message: shapeGraphMessage(r.body as GraphMessage),
+        });
+        continue;
+      }
+      const isThrottle = r.status === 429 || r.status === 503;
+      if (isThrottle && attempt < MAX_RETRIES) {
+        throttled.push(r.id);
+        const ra = parseRetryAfter(headerValue(r.headers, "Retry-After"), attempt);
+        if (ra > waitMs) waitMs = ra;
+        continue;
+      }
+      const errBody = r.body as
+        | { error?: { code?: string; message?: string } }
+        | undefined;
+      const errMsg = errBody?.error?.message ?? `status ${r.status}`;
+      results.set(r.id, {
+        ok: false,
+        id: r.id,
+        status: r.status,
+        error: errMsg,
+        retryable: isThrottle,
+      });
+    }
+
+    if (!throttled.length) break;
+    console.log(
+      `[ms-batch] throttled=${throttled.length}/${pending.length}  sleeping ${waitMs}ms`
+    );
+    await sleep(waitMs);
+    pending = throttled;
+  }
+
+  return ids.map(
+    (id) =>
+      results.get(id) ?? {
+        ok: false,
+        id,
+        error: "no response in batch",
+        retryable: false,
+      }
+  );
 }
 
 export const microsoftProvider: EmailProvider = {
@@ -339,6 +514,12 @@ export const microsoftProvider: EmailProvider = {
   disconnect,
   listMessageIds,
   getMessage,
+  getMessages,
+  // Graph caps Outlook at ~4 concurrent requests per app per mailbox. With
+  // batchSize=20 sub-requests, concurrency=2 keeps in-flight at ~40 — below
+  // the per-mailbox limit, so per-batch throttle pauses largely disappear.
+  concurrency: 2,
+  batchSize: BATCH_LIMIT,
 };
 
 export async function isMicrosoftConnected(): Promise<boolean> {

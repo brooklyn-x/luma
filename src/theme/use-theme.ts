@@ -17,3 +17,17 @@ export function useTheme(): Palette {
 export function useIsDark(): boolean {
   return useEffectiveScheme() === "dark";
 }
+
+/** Soft drop shadow for card surfaces — matches the prototype's `--card-shadow`. */
+export function useCardShadow(): string {
+  return useIsDark()
+    ? "0px 14px 34px rgba(0,0,0,0.5)"
+    : "0px 10px 30px rgba(0,0,0,0.06)";
+}
+
+/** Lighter shadow for pill chips. */
+export function useChipShadow(): string {
+  return useIsDark()
+    ? "0px 3px 10px rgba(0,0,0,0.4)"
+    : "0px 3px 10px rgba(0,0,0,0.05)";
+}

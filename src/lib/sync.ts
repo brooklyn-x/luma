@@ -1,6 +1,10 @@
 import { merchants } from "@/data/merchants";
 import type { Bill, Transaction } from "@/data/types";
-import { getProvider, type Provider } from "./email-provider";
+import {
+  getProvider,
+  type EmailMessage,
+  type Provider,
+} from "./email-provider";
 import { parseBill, parseMessage } from "./parsers";
 
 export type SyncStage = "list" | "fetch" | "parse" | "done";
@@ -47,7 +51,7 @@ export async function syncTransactions(
   onProgress?: (p: SyncProgress) => void,
   opts: SyncOptions = {}
 ): Promise<SyncResult> {
-  const { daysBack = 180, maxMessages = 2500, existing } = opts;
+  const { daysBack = 90, maxMessages = 2500, existing } = opts;
   // Only treat existing data as incremental if it came from the same provider.
   const usable = existing && existing.provider === provider ? existing : undefined;
   const since = usable ? new Date(usable.fetchedAt) : undefined;
@@ -76,82 +80,161 @@ export async function syncTransactions(
   const log: SyncLogEntry[] = [];
   let processed = 0;
 
-  const concurrency = 6;
+  const concurrency = p.concurrency ?? 6;
+  const batchSize = p.batchSize ?? 1;
+  const useBatch = batchSize > 1 && typeof p.getMessages === "function";
   const queue = [...ids];
 
-  async function worker() {
-    while (queue.length) {
-      const id = queue.shift();
-      if (!id) break;
-      let entry: SyncLogEntry;
-      try {
-        const msg = await p.getMessage(id);
-        const tx = parseMessage(msg);
-        if (tx) {
-          newTransactions.push(tx);
-          entry = {
-            id,
-            from: msg.from.email || msg.from.name,
-            subject: msg.subject,
-            date: msg.date,
-            status: "parsed",
-            amount: tx.amount,
-            merchantId: tx.merchantId,
-            merchantName: tx.merchantName,
-            category: tx.category,
-          };
-        } else {
-          const bill = parseBill(msg);
-          if (bill) {
-            newBills.push(bill);
-            entry = {
-              id,
-              from: msg.from.email || msg.from.name,
-              subject: msg.subject,
-              date: msg.date,
-              status: "bill",
-              amount: bill.totalDue,
-              merchantId: bill.issuer,
-              merchantName: `${bill.issuer} statement`,
-              category: "Bills",
-            };
-          } else {
-            entry = {
-              id,
-              from: msg.from.email || msg.from.name,
-              subject: msg.subject,
-              date: msg.date,
-              status: "skipped",
-              reason: "no amount or unknown sender",
-            };
-          }
-        }
-      } catch (err) {
-        entry = {
+  type ProcessedEntry = { entry: SyncLogEntry; tx?: Transaction; bill?: Bill };
+
+  function processFetched(
+    id: string,
+    msg: EmailMessage | null,
+    errMsg?: string
+  ): ProcessedEntry {
+    if (!msg) {
+      return {
+        entry: {
           id,
           from: "",
           subject: "",
           date: new Date().toISOString(),
           status: "error",
-          reason: err instanceof Error ? err.message : String(err),
-        };
+          reason: errMsg ?? "unknown error",
+        },
+      };
+    }
+    const tx = parseMessage(msg);
+    if (tx) {
+      return {
+        tx,
+        entry: {
+          id,
+          from: msg.from.email || msg.from.name,
+          subject: msg.subject,
+          date: msg.date,
+          status: "parsed",
+          amount: tx.amount,
+          merchantId: tx.merchantId,
+          merchantName: tx.merchantName,
+          category: tx.category,
+        },
+      };
+    }
+    const bill = parseBill(msg);
+    if (bill) {
+      return {
+        bill,
+        entry: {
+          id,
+          from: msg.from.email || msg.from.name,
+          subject: msg.subject,
+          date: msg.date,
+          status: "bill",
+          amount: bill.totalDue,
+          merchantId: bill.issuer,
+          merchantName: `${bill.issuer} statement`,
+          category: "Bills",
+        },
+      };
+    }
+    return {
+      entry: {
+        id,
+        from: msg.from.email || msg.from.name,
+        subject: msg.subject,
+        date: msg.date,
+        status: "skipped",
+        reason: "no amount or unknown sender",
+      },
+    };
+  }
+
+  function commit(res: ProcessedEntry) {
+    if (res.tx) newTransactions.push(res.tx);
+    if (res.bill) newBills.push(res.bill);
+    log.push(res.entry);
+    processed += 1;
+    onProgress?.({
+      stage: "parse",
+      total,
+      processed,
+      parsed: newTransactions.length,
+      lastEntry: res.entry,
+      incremental,
+    });
+  }
+
+  const yieldThread = () => new Promise<void>((r) => setTimeout(r, 0));
+  const needsBody: string[] = [];
+
+  async function runBatchWorker(localQueue: string[], withBody: boolean) {
+    while (localQueue.length) {
+      const chunk = localQueue.splice(0, batchSize);
+      if (!chunk.length) break;
+      try {
+        const results = await p.getMessages!(chunk, { withBody });
+        for (let i = 0; i < chunk.length; i++) {
+          const id = chunk[i];
+          const r = results[i];
+          const entry =
+            r && r.ok
+              ? processFetched(id, r.message)
+              : processFetched(id, null, r && !r.ok ? r.error : "no response");
+          if (!withBody && entry.entry.status === "skipped") {
+            // Defer to pass 2 — full body might unlock a parse.
+            needsBody.push(id);
+          } else {
+            commit(entry);
+          }
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        for (const id of chunk) commit(processFetched(id, null, errMsg));
       }
-      log.push(entry);
-      processed += 1;
-      onProgress?.({
-        stage: "parse",
-        total,
-        processed,
-        parsed: newTransactions.length,
-        lastEntry: entry,
-        incremental,
-      });
+      await yieldThread();
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, ids.length) }, () => worker())
-  );
+  async function singleWorker() {
+    while (queue.length) {
+      const id = queue.shift();
+      if (!id) break;
+      try {
+        const msg = await p.getMessage(id);
+        commit(processFetched(id, msg));
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        commit(processFetched(id, null, errMsg));
+      }
+      await yieldThread();
+    }
+  }
+
+  if (useBatch) {
+    // Pass 1: preview-only fetch. Parses ~75% of receipts without ever
+    // downloading the full HTML body. Skipped messages queue for pass 2.
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, ids.length) }, () =>
+        runBatchWorker(queue, false)
+      )
+    );
+    // Pass 2: full body for everything pass 1 couldn't parse.
+    if (needsBody.length) {
+      await Promise.all(
+        Array.from(
+          { length: Math.min(concurrency, needsBody.length) },
+          () => runBatchWorker(needsBody, true)
+        )
+      );
+    }
+  } else {
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, ids.length) }, () =>
+        singleWorker()
+      )
+    );
+  }
 
   // Merge with existing if same provider
   let mergedTransactions: Transaction[];
